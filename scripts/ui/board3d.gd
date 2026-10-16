@@ -254,8 +254,8 @@ func _bridge(at: Vector3, dir: Vector2) -> Node3D:
 	return n
 
 
-const PORT_W := 0.9
-const PORT_D := 0.9 * 275.0 / 420.0
+const PORT_W := 0.68
+const PORT_D := 0.68 * 275.0 / 420.0
 
 ## Tessera del porto attaccata al lato dell'esagono: il pontile (in alto nell'immagine) tocca la tessera.
 func _port(id: String, at: Vector3, outward: Vector2) -> Node3D:
