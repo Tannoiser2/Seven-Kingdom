@@ -1,0 +1,13 @@
+{
+  "titolo": "Seven Kingdom",
+  "sottotitolo": "sette regni, sei personaggi, una mossa",
+  "descrizione": "Il gioco originale di Stefano & Simone Ancillai: villaggi, Re, Papa, Mercante, Spia ed eserciti si contendono sette regni minacciati dagli invasori. Mappa 3D o 2D, miniature 3D, risorse da Seven Planet, carte obiettivo, editor delle mappe, IA e partite online.",
+  "online": true,
+  "sezione": "originale",
+  "ordine": 190,
+  "gioca": "https://tannoiser2.github.io/Seven-Kingdom/",
+  "generi": [
+    "Originali",
+    "Maggioranze"
+  ]
+}
