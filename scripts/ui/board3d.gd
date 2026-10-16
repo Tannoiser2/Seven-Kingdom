@@ -396,23 +396,86 @@ func _model(name: String) -> Node3D:
 
 
 ## Normalizza un modello: base a y=0, centrato, alto h.
-func _fit(n: Node3D, h: float) -> Node3D:
+## Normalizza un modello: base a y=0, centrato. Se footprint > 0 la base larga footprint (e, con align,
+## girata in modo che i lati della base siano paralleli a quelli del riquadro), altrimenti alto h.
+var _yaw_cache := {}
+
+func _fit(n: Node3D, h: float, footprint := 0.0, align := false, key := "") -> Node3D:
+	if align:
+		var yaw0: float = _yaw_cache.get(key, INF)
+		if yaw0 == INF:
+			yaw0 = _base_yaw(n)
+			_yaw_cache[key] = yaw0
+		n.rotation.y = yaw0
+	var aabb := _aabb(n)
+	var holder := Node3D.new()
+	holder.add_child(n)
+	var s := h / maxf(0.001, aabb.size.y)
+	if footprint > 0.0:
+		s = footprint / maxf(0.001, maxf(aabb.size.x, aabb.size.z))
+	n.scale = Vector3.ONE * s
+	n.position = -Vector3(aabb.get_center().x, aabb.position.y, aabb.get_center().z) * s
+	return holder
+
+
+func _aabb(n: Node3D) -> AABB:
 	var aabb := AABB()
 	var first := true
+	var rot := Transform3D(Basis(Vector3.UP, n.rotation.y), Vector3.ZERO)
 	for mi in _meshes(n):
-		var a: AABB = mi.get_aabb()
-		a = mi.transform * a
+		var a: AABB = rot * (mi.transform * mi.get_aabb())
 		if first:
 			aabb = a
 			first = false
 		else:
 			aabb = aabb.merge(a)
-	var holder := Node3D.new()
-	holder.add_child(n)
-	var s := h / maxf(0.001, aabb.size.y)
-	n.scale = Vector3.ONE * s
-	n.position = -Vector3(aabb.get_center().x, aabb.position.y, aabb.get_center().z) * s
-	return holder
+	return aabb
+
+
+## Rotazione che allinea la base del modello agli assi: fra 0° e 90° quella con l'ingombro minimo dei
+## vertici più bassi.
+func _base_yaw(n: Node3D) -> float:
+	var pts := PackedVector2Array()
+	var ymin := INF
+	var all := []
+	for mi in _meshes(n):
+		var m: MeshInstance3D = mi
+		for si in m.mesh.get_surface_count():
+			var arr: Array = m.mesh.surface_get_arrays(si)
+			var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			for k in range(0, verts.size(), 3):
+				var v: Vector3 = m.transform * verts[k]
+				all.append(v)
+				ymin = minf(ymin, v.y)
+	var aabb := _aabb(n)
+	var lim := ymin + aabb.size.y * 0.12
+	for v in all:
+		if v.y <= lim:
+			pts.append(Vector2(v.x, v.z))
+	if pts.size() < 8:
+		return 0.0
+	var best := 0.0
+	var best_area := INF
+	for d in range(0, 90, 1):
+		var a := deg_to_rad(float(d))
+		var c := cos(a)
+		var sn := sin(a)
+		var x0 := INF
+		var x1 := -INF
+		var z0 := INF
+		var z1 := -INF
+		for p in pts:
+			var x := p.x * c - p.y * sn
+			var z := p.x * sn + p.y * c
+			x0 = minf(x0, x)
+			x1 = maxf(x1, x)
+			z0 = minf(z0, z)
+			z1 = maxf(z1, z)
+		var area := (x1 - x0) * (z1 - z0)
+		if area < best_area:
+			best_area = area
+			best = a
+	return -best
 
 
 func _meshes(n: Node) -> Array:
@@ -492,6 +555,29 @@ func _disc(path: String, d: float, thick: float, side: Color) -> Node3D:
 	qm.roughness = 0.5
 	q.material_override = qm
 	q.position.y = thick + 0.002
+	holder.add_child(q)
+	return holder
+
+
+## Segnalino quadrato (come i cartoncini delle risorse) con l'immagine sopra.
+func _square(path: String, d: float, thick: float, side: Color) -> Node3D:
+	var holder := Node3D.new()
+	var bx := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(d, thick, d)
+	bx.mesh = bm
+	bx.material_override = _mat(side, 0.7)
+	bx.position.y = thick / 2.0
+	holder.add_child(bx)
+	var q := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(d * 0.98, d * 0.98)
+	q.mesh = pm
+	var qm := StandardMaterial3D.new()
+	qm.albedo_texture = UI.tex(path)
+	qm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	q.material_override = qm
+	q.position.y = thick + 0.001
 	holder.add_child(q)
 	return holder
 
@@ -646,26 +732,26 @@ func _make(kind: String, v) -> Node3D:
 			if p == SKState.INV:
 				if pieces3d:
 					var cp := _camp3d()
-					cp.scale = Vector3.ONE * 1.35
+					cp.scale = Vector3.ONE * 1.95
 					return cp
-				return _sprite("res://assets/tokens/invasore.webp", 0.12, map3d)
+				return _sprite("res://assets/tokens/invasore.webp", 0.155, false)
 			if pieces3d:
-				var m := _fit(_model("villaggio"), 0.135)
+				var m := _fit(_model("villaggio"), 0.0, 0.158, true, "villaggio")
 				_tint(m, p)
 				return m
-			return _sprite("res://assets/tokens/villaggio_%s.webp" % UI.cid(p), 0.12, false if not map3d else false)
+			return _sprite("res://assets/tokens/villaggio_%s.webp" % UI.cid(p), 0.158, false)
 		"res":
 			if pieces3d:
 				var hold := Node3D.new()
-				var base := _disc("res://assets/res/%s.webp" % v, 0.075, 0.008, SKData.RES_COLOR[v].darkened(0.3))
+				var base := _square("res://assets/res/%s.webp" % v, 0.15, 0.01, SKData.RES_COLOR[v].darkened(0.35))
 				base.position = Vector3(0.0, 0, 0.0)
 				hold.add_child(base)
 				var rs := _res3d(v)
-				rs.scale = Vector3.ONE * 1.7
-				rs.position = Vector3(0, 0.009, 0)
+				rs.scale = Vector3.ONE * 1.9
+				rs.position = Vector3(0.0, 0.011, 0.0)
 				hold.add_child(rs)
 				return hold
-			return _sprite("res://assets/res/%s.webp" % v, 0.075, false)
+			return _sprite("res://assets/res/%s.webp" % v, 0.15, false)
 		"econ":
 			return _disc("res://assets/tokens/ricchezza.webp", 0.085, 0.012 if pieces3d else 0.0, Color("#b8892e"))
 		"infl":
@@ -739,11 +825,11 @@ func refresh(animate := true) -> void:
 			if p != -1:
 				var k := "v%d_%d" % [r, i]
 				want[k] = true
-				_place(k, "vil", p, site_pos(r, i), animate, deg_to_rad(float((r * 7 + i * 13) % 5) * 8.0 - 16.0))
+				_place(k, "vil", p, site_pos(r, i), animate)
 			elif rg["res"][i] != "":
 				var k2 := "r%d_%d" % [r, i]
 				want[k2] = true
-				_place(k2, "res", rg["res"][i], site_pos(r, i), animate, deg_to_rad(float((r + i * 3) % 7) * 12.0))
+				_place(k2, "res", rg["res"][i], site_pos(r, i), animate)
 		var e: int = rg["econ"]
 		if e >= 1:
 			want["e%d" % r] = true
