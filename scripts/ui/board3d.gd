@@ -191,7 +191,7 @@ func build_map() -> void:
 		var p := int(pt["pos"])
 		var c := SKData.pos_center(p)
 		var em := SKData.edge_mid(int(pt["edge"]))
-		var at := c + em * TILE_SCALE * 1.02
+		var at := c + em * TILE_SCALE
 		var outward := em.normalized()
 		port_pos[pt["id"]] = [at, outward]
 		root_tiles.add_child(_port(pt["id"], Vector3(at.x, base_y(), at.y), outward))
@@ -254,36 +254,41 @@ func _bridge(at: Vector3, dir: Vector2) -> Node3D:
 	return n
 
 
+const PORT_W := 0.9
+const PORT_D := 0.9 * 275.0 / 420.0
+
+## Tessera del porto attaccata al lato dell'esagono: il pontile (in alto nell'immagine) tocca la tessera.
 func _port(id: String, at: Vector3, outward: Vector2) -> Node3D:
 	var n := Node3D.new()
-	n.position = at + Vector3(outward.x, 0, outward.y) * 0.16 + Vector3(0, 0.02, 0)
+	n.position = at + Vector3(outward.x, 0, outward.y) * (PORT_D / 2.0)
+	n.position.y = 0.02 if map3d else 0.006
+	n.rotation.y = atan2(outward.x, outward.y)
+	if map3d:
+		var base := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(PORT_W * 0.97, 0.02, PORT_D * 0.86)
+		base.mesh = bm
+		base.material_override = _mat(Color("#3a2a1c"), 0.9)
+		base.position = Vector3(0, -0.009, PORT_D * 0.04)
+		n.add_child(base)
 	var q := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
-	pm.size = Vector2(0.30, 0.30)
+	pm.size = Vector2(PORT_W, PORT_D)
 	q.mesh = pm
 	var m := StandardMaterial3D.new()
-	m.albedo_texture = UI.tex("res://assets/tokens/porto_%s.webp" % SKData.PORT_NAMES[id]["pair"])
+	m.albedo_texture = UI.tex("res://assets/tokens/porto_%s.webp" % id)
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	m.roughness = 0.8
 	q.material_override = m
+	q.position.y = 0.002
 	n.add_child(q)
-	var lb := Label3D.new()
-	lb.text = SKData.PORT_NAMES[id]["n"]
-	lb.font = UI.font_title
-	lb.font_size = 44
-	lb.pixel_size = 0.0022
-	lb.outline_size = 10
-	lb.modulate = Color("#fff0c8")
-	lb.outline_modulate = Color(0, 0, 0, 0.8)
-	lb.rotation_degrees.x = -90
-	lb.position = Vector3(0, 0.01, 0.22)
-	n.add_child(lb)
 	return n
 
 
 ## Rotta tratteggiata fra due porti collegati.
 func _route(a: Array, b: Array, col: Color) -> void:
-	var pa: Vector2 = a[0] + a[1] * 0.16
-	var pb: Vector2 = b[0] + b[1] * 0.16
+	var pa: Vector2 = a[0] + a[1] * PORT_D
+	var pb: Vector2 = b[0] + b[1] * PORT_D
 	var ctrl = (pa + pb) / 2.0 + (a[1] + b[1]).normalized() * maxf(1.2, pa.distance_to(pb) * 0.35)
 	if (a[1] + b[1]).length() < 0.2:
 		ctrl = (pa + pb) / 2.0 + a[1] * 1.4

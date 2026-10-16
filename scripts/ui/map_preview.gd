@@ -90,12 +90,16 @@ func _draw() -> void:
 	for pt in scen.get("ports", []):
 		var c3 := hex_center(int(pt["pos"]))
 		var em := SKData.edge_mid(int(pt["edge"]))
-		var at := c3 + em * R * 1.06
-		pp[pt["id"]] = at
-		var col := Color("#2a5bd7") if SKData.PORT_NAMES[pt["id"]]["pair"] == "I" else Color("#8c3cc4")
-		draw_circle(at, R * 0.16, Color("#f4e6c4"))
-		draw_arc(at, R * 0.16, 0, TAU, 20, col, 3.0)
-		draw_string(UI.font_title, at + Vector2(-R * 0.08, R * 0.08), SKData.PORT_NAMES[pt["id"]]["pair"], HORIZONTAL_ALIGNMENT_LEFT, -1, int(R * 0.22), col)
+		var outward := em.normalized()
+		var w := R * 0.9
+		var d := w * 275.0 / 420.0
+		var ctr := c3 + em * R * 0.955 + outward * d / 2.0
+		pp[pt["id"]] = ctr + outward * d / 2.0
+		var tex := UI.tex("res://assets/tokens/porto_%s.webp" % pt["id"])
+		if tex != null:
+			draw_set_transform(ctr, atan2(outward.y, outward.x) - PI / 2.0, Vector2.ONE)
+			draw_texture_rect(tex, Rect2(-w / 2.0, -d / 2.0, w, d), false)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	for pr in [["alba", "vespro"], ["rupe", "bruma"]]:
 		if pp.has(pr[0]) and pp.has(pr[1]):
 			var col2 := Color("#f3d58c") if pr[0] == "alba" else Color("#d6b8f0")
