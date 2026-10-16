@@ -63,6 +63,7 @@ func _run() -> void:
 		if view == null or not ("engine" in view) or view.engine == null:
 			continue
 		var e: SKEngine = view.engine
+		view.auto_next = true
 		var req: Dictionary = view.pending
 		if not req.is_empty() and view.online._mine_pending:
 			view._provide(ai.decide(e, req["seat"], req))

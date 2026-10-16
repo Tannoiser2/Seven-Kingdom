@@ -20,7 +20,7 @@ var top_lbl: Label
 var phase_lbl: Label
 var online_lbl: Label
 var left_box: VBoxContainer
-var cards_box: GridContainer
+var cards_box: VBoxContainer
 var prompt_box: VBoxContainer
 var log_box: RichTextLabel
 var tip: PanelContainer
@@ -30,10 +30,19 @@ var toast_box: VBoxContainer
 var btn_map: Button
 var btn_pcs: Button
 var _refresh_queued := false
+# barra di stato: cosa è appena successo, con «Avanti»
+var status_pc: PanelContainer
+var status_title: Label
+var status_txt: RichTextLabel
+var btn_next: Button
+var btn_auto: Button
+var auto_next := false
+var pause_regs: Array = []
+signal next_pressed
 var game_done := false
 
 const LW := 300.0
-const RW := 430.0
+const RW := 480.0
 
 
 func _ready() -> void:
@@ -68,6 +77,8 @@ func _ready() -> void:
 	_build_left()
 	_build_right()
 	_build_cam()
+	_build_status()
+	engine.pause_cb = _on_pause
 	toast_box = VBoxContainer.new()
 	toast_box.position = Vector2(LW + 30, 74)
 	toast_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -209,28 +220,148 @@ func _build_right() -> void:
 	vb.add_theme_constant_override("separation", 8)
 	pc.add_child(vb)
 	vb.add_child(UI.title("I personaggi", 22))
-	cards_box = GridContainer.new()
-	cards_box.columns = 3
-	cards_box.add_theme_constant_override("h_separation", 6)
-	cards_box.add_theme_constant_override("v_separation", 6)
+	cards_box = VBoxContainer.new()
+	cards_box.add_theme_constant_override("separation", 4)
 	vb.add_child(cards_box)
 	var ps := ScrollContainer.new()
-	ps.custom_minimum_size = Vector2(0, 250)
+	ps.custom_minimum_size = Vector2(0, 160)
+	ps.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	ps.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vb.add_child(ps)
 	prompt_box = VBoxContainer.new()
 	prompt_box.add_theme_constant_override("separation", 8)
 	prompt_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ps.add_child(prompt_box)
-	vb.add_child(UI.title("Cronaca", 18))
+	vb.add_child(UI.title("Cronaca", 16))
 	var ls := ScrollContainer.new()
-	ls.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	ls.custom_minimum_size = Vector2(0, 120)
 	ls.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vb.add_child(ls)
 	log_box = UI.rich(16, Color("#e6dcc3"))
 	log_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ls.add_child(log_box)
 	log_box.set_meta("scroll", ls)
+
+
+const VIEW_CFG := "user://vista.cfg"
+
+
+func _build_status() -> void:
+	var c := ConfigFile.new()
+	if c.load(VIEW_CFG) == OK:
+		auto_next = bool(c.get_value("v", "auto", false))
+	status_pc = PanelContainer.new()
+	status_pc.add_theme_stylebox_override("panel", UI.flat(Color(0.05, 0.08, 0.15, 0.94), UI.GOLD, 2, 10, 12))
+	status_pc.anchor_left = 0.0
+	status_pc.anchor_right = 1.0
+	status_pc.anchor_top = 1.0
+	status_pc.anchor_bottom = 1.0
+	status_pc.offset_left = LW + 20
+	status_pc.offset_right = -RW - 20
+	status_pc.offset_bottom = -64
+	status_pc.offset_top = -64
+	status_pc.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	status_pc.visible = false
+	add_child(status_pc)
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 12)
+	status_pc.add_child(hb)
+	var vb := VBoxContainer.new()
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.add_theme_constant_override("separation", 2)
+	hb.add_child(vb)
+	status_title = UI.label("", 20, UI.GOLD, UI.font_title)
+	vb.add_child(status_title)
+	status_txt = UI.rich(17, UI.LIGHT)
+	status_txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.add_child(status_txt)
+	var bv := VBoxContainer.new()
+	bv.add_theme_constant_override("separation", 6)
+	hb.add_child(bv)
+	btn_next = UI.primary(UI.button("Avanti ›", 150, 46, 18))
+	btn_next.tooltip_text = "Continua la partita (anche con Invio o Spazio)"
+	btn_next.pressed.connect(func(): next_pressed.emit())
+	bv.add_child(btn_next)
+	btn_auto = UI.button("", 150, 34, 12)
+	btn_auto.pressed.connect(func():
+		auto_next = not auto_next
+		var cf := ConfigFile.new()
+		cf.set_value("v", "auto", auto_next)
+		cf.save(VIEW_CFG)
+		_paint_auto()
+		if auto_next:
+			next_pressed.emit())
+	bv.add_child(btn_auto)
+	_paint_auto()
+
+
+func _paint_auto() -> void:
+	btn_auto.text = "Automatico: sì" if auto_next else "Automatico: no"
+	btn_auto.tooltip_text = "Sì: la partita va avanti da sola, senza fermarsi dopo ogni mossa degli avversari."
+
+
+func _unhandled_key_input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and (ev.keycode == KEY_ENTER or ev.keycode == KEY_SPACE or ev.keycode == KEY_KP_ENTER):
+		if btn_next.visible and status_pc.visible:
+			next_pressed.emit()
+
+
+## Mostra cosa è appena successo e, se non è automatico, aspetta «Avanti».
+func _on_pause(kind: String, who: int, lines: Array, regs: Array) -> void:
+	if online != null and online.catchup:
+		return
+	if game_done:
+		return
+	var shown := []
+	for l in lines:
+		var t: String = l
+		if t.begins_with("—") or t == "Azioni passive dei personaggi.":
+			continue
+		shown.append(t)
+	if shown.is_empty():
+		return
+	var title := ""
+	var mine := false
+	match kind:
+		"move":
+			var c := ""
+			for k in engine.st.used:
+				if engine.st.used[k] == who:
+					c = k
+			title = "%s — %s" % [engine.pname(who), SKData.CHAR_NAME.get(c, "mossa")]
+			mine = _is_local(who)
+		"passive":
+			title = "Azioni passive dei personaggi"
+		"end":
+			title = "Fine del turno %d" % engine.st.turn
+		"setup":
+			title = "Piazzamento iniziale completato"
+	status_title.text = title
+	status_title.add_theme_color_override("font_color", UI.plight(who) if kind == "move" else UI.GOLD)
+	status_txt.text = ""
+	for t in shown:
+		var col := "#efe4c9"
+		if t.contains("GUERRA") or t.contains("Invasione") or t.contains("invasore") or t.contains("Sconfitta"):
+			col = "#ff9f8f"
+		elif t.contains("VITTORIA") or t.contains("Favore") or t.contains("Corona"):
+			col = "#ffe08a"
+		status_txt.append_text("[color=%s]• %s[/color]\n" % [col, t])
+	status_pc.visible = true
+	pause_regs = regs
+	_apply_highlight()
+	if mine:
+		btn_next.visible = false
+		pause_regs = []
+		return
+	btn_next.visible = true
+	if auto_next:
+		if engine.ai_delay > 0.01:
+			await get_tree().create_timer(maxf(1.0, engine.ai_delay * 1.6)).timeout
+	else:
+		await next_pressed
+	btn_next.visible = false
+	pause_regs = []
+	_apply_highlight()
 
 
 func _build_cam() -> void:
@@ -368,68 +499,91 @@ func _can_see_objective(p: int) -> bool:
 	return p == engine.cur and humans.has(p)
 
 
+func _viewer() -> int:
+	if pending.get("type", "") == "turn":
+		return _me()
+	if online != null:
+		return online.seat
+	return humans[0] if not humans.is_empty() else -1
+
+
 func _refresh_cards() -> void:
 	var st: SKState = engine.st
 	for c in cards_box.get_children():
 		c.queue_free()
-	var my_turn = pending.get("type", "") == "turn"
+	var my_turn: bool = pending.get("type", "") == "turn"
+	var me := _viewer()
+	var fav: bool = me >= 0 and st.favor[me]
 	for c in SKData.CHARS:
-		var b := Button.new()
-		b.custom_minimum_size = Vector2(132, 116)
-		b.clip_contents = true
 		var used: bool = st.used.has(c)
 		var chosen: bool = sel.get("c", "") == c
-		var base := UI.flat(Color(0.1, 0.14, 0.24), UI.GOLD if chosen else UI.GOLD_DARK, 3 if chosen else 1, 8, 4)
-		b.add_theme_stylebox_override("normal", base)
-		b.add_theme_stylebox_override("hover", UI.flat(Color(0.16, 0.22, 0.36), UI.GOLD, 2, 8, 4))
-		b.add_theme_stylebox_override("pressed", base)
-		b.add_theme_stylebox_override("disabled", UI.flat(Color(0.08, 0.08, 0.1), Color(0.3, 0.3, 0.3), 1, 8, 4))
-		b.add_theme_stylebox_override("focus", base)
+		var b := PanelContainer.new()
+		b.mouse_filter = Control.MOUSE_FILTER_STOP
+		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		var bg_col := Color(0.1, 0.14, 0.24) if not used else Color(0.07, 0.07, 0.09)
+		var lit: bool = my_turn and not used
+		var border := UI.GOLD if chosen else (Color("#e9c766") if lit else Color(0.35, 0.33, 0.3))
+		b.add_theme_stylebox_override("panel", UI.flat(bg_col, border, 3 if chosen else (2 if lit else 1), 8, 4))
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 8)
+		hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(hb)
 		var art := TextureRect.new()
 		art.texture = UI.tex("res://assets/chars/%s_art.webp" % c)
 		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		art.set_anchors_preset(Control.PRESET_FULL_RECT)
-		art.offset_bottom = -26
-		art.offset_left = 3
-		art.offset_right = -3
-		art.offset_top = 3
+		art.custom_minimum_size = Vector2(78, 64)
 		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if used:
-			art.modulate = Color(0.35, 0.35, 0.35)
-		b.add_child(art)
-		var nm := UI.label(SKData.CHAR_SHORT[c], 15, UI.GOLD if not used else Color(0.6, 0.6, 0.6), UI.font_title)
-		nm.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-		nm.offset_top = -26
-		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			art.modulate = Color(0.4, 0.4, 0.4)
+		hb.add_child(art)
+		var vb := VBoxContainer.new()
+		vb.add_theme_constant_override("separation", 0)
+		vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hb.add_child(vb)
+		var top := HBoxContainer.new()
+		top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var nm := UI.label(SKData.CHAR_SHORT[c], 16, UI.GOLD if not used else Color(0.55, 0.55, 0.55), UI.font_title)
 		nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		b.add_child(nm)
+		top.add_child(nm)
+		var where := UI.label("  in " + SKData.TILES[st.regions[st.chars[c]]["tile"]]["short"], 14, UI.PARCH.darkened(0.2) if not used else Color(0.5, 0.5, 0.5), UI.font_italic)
+		where.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		where.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		top.add_child(where)
 		if used:
-			var mk := TextureRect.new()
-			mk.texture = UI.tex("res://assets/tokens/azione_%s.webp" % UI.cid(st.used[c]))
-			mk.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			mk.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			mk.position = Vector2(76, 30)
-			mk.size = Vector2(52, 52)
-			mk.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			b.add_child(mk)
-		var where := st.rname(st.chars[c])
-		b.tooltip_text = "%s — in %s\n\nNORMALE: %s\n\nPOTENZIATA (scarta il Favore Papale): %s\n\nPASSIVA: %s" % [SKData.CHAR_NAME[c], where,
+			var who := UI.label("usato da " + engine.pname(st.used[c]), 14, UI.plight(st.used[c]), UI.font_bold)
+			who.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			top.add_child(who)
+			top.add_child(UI.icon("res://assets/tokens/azione_%s.webp" % UI.cid(st.used[c]), 20))
+		vb.add_child(top)
+		var ln := UI.wrap("Normale: " + SKData.CHAR_BRIEF[c][0], 13, UI.LIGHT if not used else Color(0.5, 0.5, 0.5), RW - 140)
+		ln.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vb.add_child(ln)
+		var pcol := UI.GOLD if (fav and not used) else Color(0.55, 0.53, 0.5)
+		var lp := UI.wrap("Potenziata: " + SKData.CHAR_BRIEF[c][1] + ("" if fav or used else " (serve il Favore)"), 13, pcol, RW - 140, UI.font_italic)
+		lp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vb.add_child(lp)
+		b.tooltip_text = "%s\n\nNORMALE: %s\n\nPOTENZIATA (scarta il Favore Papale): %s\n\nPASSIVA: %s" % [SKData.CHAR_NAME[c],
 			SKData.CHAR_TEXT[c]["normale"], SKData.CHAR_TEXT[c]["potenziata"], SKData.CHAR_TEXT[c]["passiva"]]
-		b.disabled = used or not my_turn
-		if not my_turn and not used:
-			b.disabled = false
 		var cc: String = c
-		b.pressed.connect(func(): _pick_char(cc))
+		b.gui_input.connect(func(ev):
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+				Audio.play("click", -6.0)
+				_pick_char(cc))
 		cards_box.add_child(b)
 
 
+var _ev_seen := 0
+
 func _play_events() -> void:
 	var st: SKState = engine.st
-	if st.events.is_empty():
+	if st.events.size() < _ev_seen:
+		_ev_seen = 0
+	if st.events.size() == _ev_seen:
 		return
 	var sounds := {}
-	for e in st.events:
+	for e in st.events.slice(_ev_seen):
 		match e["k"]:
 			"place", "inv": sounds["pawn"] = true
 			"res": sounds["coin"] = true
@@ -441,7 +595,7 @@ func _play_events() -> void:
 			"crown", "favor": sounds["bell"] = true
 			"move": sounds["voyage"] = true
 			"steal": sounds["market"] = true
-	st.events.clear()
+	_ev_seen = st.events.size()
 	for s in sounds:
 		Audio.play(s, -4.0)
 
@@ -578,6 +732,8 @@ func _on_decision(req: Dictionary) -> void:
 	last_human = p
 	sel = {}
 	step = ""
+	if is_instance_valid(status_pc) and not btn_next.visible:
+		status_pc.visible = req["type"] in ["tie", "crown", "battle_favor", "battle_gov"] and status_pc.visible
 	match req["type"]:
 		"turn":
 			step = "char"
@@ -714,6 +870,7 @@ func _pick_char(c: String) -> void:
 		return
 	var st: SKState = engine.st
 	if st.used.has(c):
+		_show_card(c)
 		return
 	var pw: bool = sel.get("pw", false) and st.favor[_me()]
 	sel = {"c": c, "pw": pw}
@@ -912,7 +1069,7 @@ func _apply_highlight() -> void:
 				for i in st.spy_sites(r, sel["pw"]):
 					sts.append([r, i])
 	if pending.is_empty():
-		regs = []
+		regs = pause_regs.duplicate()
 		sts = []
 	board.set_highlight(regs, sts)
 
@@ -957,7 +1114,6 @@ func _build_prompt() -> void:
 	var c: String = sel["c"]
 	var mode := " (potenziata)" if sel.get("pw", false) else ""
 	prompt_box.add_child(UI.label(SKData.CHAR_NAME[c] + mode, 19, UI.GOLD, UI.font_title))
-	prompt_box.add_child(UI.wrap(SKData.CHAR_TEXT[c]["potenziata" if sel.get("pw", false) else "normale"], 16, UI.PARCH, RW - 40, UI.font_italic))
 	match step:
 		"dest":
 			prompt_box.add_child(UI.wrap("Dove lo sposti? (Il movimento è obbligatorio; i regni illuminati sono raggiungibili%s.)" % ("" if c == "cavalleria" else ", anche via porto"), 18, UI.LIGHT, RW - 40))

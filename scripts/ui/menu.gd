@@ -59,6 +59,17 @@ func _build() -> void:
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(shade)
+	# la copertina della scatola, a destra
+	if vp.x >= 1500:
+		var box_art := TextureRect.new()
+		box_art.texture = UI.tex("res://assets/ui/copertina_scatola.webp")
+		box_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		box_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		var h := minf(vp.y - 60.0, (vp.x - 1420.0) / 0.706)
+		box_art.size = Vector2(h * 0.706, h)
+		box_art.position = Vector2(vp.x - h * 0.706 - 30.0, (vp.y - h) / 2.0)
+		box_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(box_art)
 	var sc := ScrollContainer.new()
 	sc.set_anchors_preset(Control.PRESET_FULL_RECT)
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED

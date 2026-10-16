@@ -69,6 +69,7 @@ func _run() -> void:
 	main.start_game({"players": players, "colors": [0, 1, 2, 3], "seed": 77, "ai_delay": 0.0, "opts": {"objectives": true},
 		"scenario": SKData.scenario(args[4] if args.size() > 4 else "base"), "map3d": m3, "pieces3d": p3})
 	await wait(20)
+	gv().auto_next = true
 	await shot("obiettivo")
 	auto_answer()
 	await wait(10)
@@ -78,8 +79,18 @@ func _run() -> void:
 	while gv().engine.st.turn < turns and Time.get_ticks_msec() - t0 < 120000:
 		await wait(2)
 		auto_answer()
-	# una mossa a metà: il Re scelto e la destinazione
+	# una pausa dopo la mossa di un avversario: la barra di stato con «Avanti»
 	var g = gv()
+	g.auto_next = false
+	var t1 := Time.get_ticks_msec()
+	while not (g.btn_next.visible and g.status_pc.visible) and Time.get_ticks_msec() - t1 < 60000:
+		await wait(2)
+		auto_answer()
+	await wait(20)
+	await shot("pausa")
+	g.auto_next = true
+	g.next_pressed.emit()
+	# una mossa a metà: il Re scelto e la destinazione
 	var safety := 0
 	while (g.pending.is_empty() or g.pending["type"] != "turn") and safety < 400:
 		await wait(2)

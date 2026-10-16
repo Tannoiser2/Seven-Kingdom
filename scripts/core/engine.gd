@@ -25,6 +25,10 @@ var phase := ""
 var cur := -1
 var results: Array = []
 var _log_seen := 0
+## Pausa dopo le mosse degli altri e le fasi passive (la vista mostra cosa è successo e aspetta «Avanti»).
+## pause_cb(kind, who, righe del registro, regni toccati) è una funzione della vista che può attendere.
+var pause_cb: Callable
+var _mark := 0
 
 
 func setup(cfg: Dictionary) -> void:
@@ -72,6 +76,31 @@ func ask(p: int, req: Dictionary):
 	decision_requested.emit(req)
 	var r = await decision_provided
 	return r
+
+
+## Segna l'inizio di un passaggio da riassumere.
+func _begin_step() -> void:
+	_mark = st.log_lines.size()
+	st.events.clear()
+
+
+func _pause(kind: String, who := -1) -> void:
+	flush_log()
+	if headless or abort or not pause_cb.is_valid():
+		return
+	var lines: Array = st.log_lines.slice(_mark)
+	var regs := {}
+	for e in st.events:
+		if e.has("r"):
+			regs[int(e["r"])] = true
+		if e.has("path"):
+			for r in e["path"].slice(1):
+				regs[int(r)] = true
+		if e.has("a"):
+			regs[int(e["a"][0])] = true
+			regs[int(e["b"][0])] = true
+	changed.emit()
+	await pause_cb.call(kind, who, lines, regs.keys())
 
 
 func provide_decision(r) -> void:
@@ -125,6 +154,8 @@ func run() -> void:
 	var last := (st.first + n - 1) % n
 	st.favor[last] = true
 	log_msg("%s, ultimo a giocare, riceve un Favore Papale." % pname(last))
+	_mark = 0
+	await _pause("setup")
 	# turni
 	while not st.game_over:
 		await play_turn()
@@ -151,6 +182,7 @@ func play_turn() -> void:
 		var p := (start + k) % n
 		cur = p
 		var tries := 0
+		_begin_step()
 		while true:
 			var m = await ask(p, {"type": "turn"})
 			if m is Dictionary and st.check_move(p, m) == "":
@@ -164,16 +196,21 @@ func play_turn() -> void:
 			log_msg("(mossa non consentita: %s)" % st.check_move(p, m if m is Dictionary else {}))
 		flush_log()
 		changed.emit()
+		await _pause("move", p)
 	cur = -1
 	_set_phase("passive")
+	_begin_step()
 	log_msg("Azioni passive dei personaggi.")
 	await st.passive_phase(self)
 	flush_log()
 	changed.emit()
+	await _pause("passive")
 	_set_phase("fine turno")
+	_begin_step()
 	st.end_phase()
 	flush_log()
 	changed.emit()
+	await _pause("end")
 
 
 # ------------------------------------------------------------------ scelte durante le fasi passive

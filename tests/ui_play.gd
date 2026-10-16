@@ -32,6 +32,7 @@ func _run() -> void:
 			"scenario": sc, "map3d": g % 2 == 0, "pieces3d": g % 3 != 0})
 		await wait(5)
 		var view = main.current
+		view.auto_next = true
 		var guard := 0
 		while not view.game_done and guard < 20000:
 			guard += 1

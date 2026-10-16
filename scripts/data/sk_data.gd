@@ -182,6 +182,16 @@ const CHAR_MODEL := {"re": "res://assets/models/re.glb", "papa": "res://assets/m
 	"spia": "res://assets/models/spia.glb", "fanteria": "res://assets/models/fanteria.glb", "cavalleria": "res://assets/models/cavalleria.glb"}
 const CHAR_COLOR := {"re": Color("#a31f24"), "papa": Color("#e9dcb5"), "mercante": Color("#c08a2e"), "spia": Color("#5b2f7a"), "fanteria": Color("#9b2a22"), "cavalleria": Color("#7a1f1a")}
 
+## Riassunto di una riga delle azioni (normale, potenziata), mostrato sotto il ritratto.
+const CHAR_BRIEF := {
+	"re": ["2 villaggi qui + 1 in un regno adiacente, almeno uno di un altro colore.", "2 villaggi di qualsiasi colore al 2° (e 3°) posto."],
+	"papa": ["1 influenza religiosa qui o in un regno adiacente.", "Anche in guerra, e nomini un tuo Vescovo."],
+	"mercante": ["Ruba 1 risorsa a un avversario.", "Ruba 2 risorse a un avversario."],
+	"spia": ["Scambia un villaggio qui con uno adiacente (no Governatori).", "Scambia anche i Governatori."],
+	"fanteria": ["Scaccia 1 invasore e costruisci; o battaglia (+1).", "Scaccia 2 invasori e costruisci 2 villaggi."],
+	"cavalleria": ["Muove 1-2 (no porti): scaccia 1 invasore; o battaglia.", "Scaccia 2 invasori e costruisci 2 villaggi."],
+}
+
 const CHAR_TEXT := {
 	"re": {"normale": "Piazza 2 villaggi nel regno del Re e 1 in un regno adiacente, sui siti liberi in ordine crescente. Se ne piazzi 2 o più, almeno uno è di un altro colore; se ne piazzi solo 1, è tuo. Vietato nei regni in guerra o con un esercito.",
 		"potenziata": "Piazza 2 villaggi di qualsiasi colore nel regno del Re e/o in uno adiacente, in seconda (e terza) posizione: i villaggi presenti scalano in avanti, chi esce torna alla riserva (anche gli invasori). Ammesso nei regni pacificati o con un esercito, mai in guerra.",

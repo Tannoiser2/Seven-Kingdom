@@ -507,6 +507,21 @@ func _tint(n: Node, p: int) -> void:
 				m.set_surface_override_material(s, sm)
 
 
+## Annerisce un modello (insediamenti degli invasori).
+func _tint_dark(n: Node) -> void:
+	for mi in _meshes(n):
+		var m: MeshInstance3D = mi
+		for s in m.mesh.get_surface_count():
+			var src = m.get_active_material(s)
+			if src is BaseMaterial3D:
+				var sm := ShaderMaterial.new()
+				sm.shader = tint_shader
+				sm.set_shader_parameter("tex", src.albedo_texture)
+				sm.set_shader_parameter("hsv", Vector3(0.0, 0.0, 0.25))
+				sm.set_shader_parameter("dark", 0.32)
+				m.set_surface_override_material(s, sm)
+
+
 func _sprite(path: String, h: float, standing: bool) -> Node3D:
 	var holder := Node3D.new()
 	var sp := Sprite3D.new()
@@ -731,15 +746,22 @@ func _make(kind: String, v) -> Node3D:
 			var p: int = v
 			if p == SKState.INV:
 				if pieces3d:
+					# insediamento invasore: lo stesso villaggio, annerito, con la palizzata attorno
+					var iv := _fit(_model("villaggio"), 0.0, 0.17, true, "villaggio")
+					_tint_dark(iv)
 					var cp := _camp3d()
-					cp.scale = Vector3.ONE * 1.95
-					return cp
-				return _sprite("res://assets/tokens/invasore.webp", 0.155, false)
+					cp.scale = Vector3.ONE * 2.3
+					cp.position.y = 0.0
+					var hold := Node3D.new()
+					hold.add_child(iv)
+					hold.add_child(cp)
+					return hold
+				return _sprite("res://assets/tokens/invasore.webp", 0.19, false)
 			if pieces3d:
-				var m := _fit(_model("villaggio"), 0.0, 0.158, true, "villaggio")
+				var m := _fit(_model("villaggio"), 0.0, 0.19, true, "villaggio")
 				_tint(m, p)
 				return m
-			return _sprite("res://assets/tokens/villaggio_%s.webp" % UI.cid(p), 0.158, false)
+			return _sprite("res://assets/tokens/villaggio_%s.webp" % UI.cid(p), 0.19, false)
 		"res":
 			if pieces3d:
 				var hold := Node3D.new()
@@ -1157,6 +1179,7 @@ const TINT_SHADER := """
 shader_type spatial;
 uniform sampler2D tex : source_color, filter_linear_mipmap;
 uniform vec3 hsv = vec3(0.0, 1.0, 1.0);
+uniform float dark = 1.0;
 vec3 rgb2hsv(vec3 c) {
 	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
 	vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
@@ -1176,7 +1199,12 @@ void fragment() {
 	float hd = min(h.x, 1.0 - h.x);
 	float red = smoothstep(0.075, 0.035, hd) * smoothstep(0.28, 0.48, h.y);
 	vec3 nc = hsv2rgb(vec3(hsv.x, clamp(h.y * hsv.y, 0.0, 1.0), clamp(h.z * hsv.z, 0.0, 1.0)));
-	ALBEDO = mix(c, nc, red);
+	vec3 o = mix(c, nc, red);
+	if (dark < 1.0) {
+		float l = dot(o, vec3(0.3, 0.59, 0.11));
+		o = mix(vec3(l), o, 0.25) * dark;
+	}
+	ALBEDO = o;
 	ROUGHNESS = 0.75;
 }
 """
