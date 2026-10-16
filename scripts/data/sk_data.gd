@@ -195,11 +195,11 @@ const CHAR_TEXT := {
 	"spia": {"normale": "Scambia due villaggi: uno nel regno della Spia e uno in un regno adiacente. Non si scambiano i Governatori (sito 1). I villaggi possono essere di chiunque.",
 		"potenziata": "Come la normale, ma si possono scambiare anche i Governatori, anche due Governatori fra loro.",
 		"passiva": "La Spia aggiunge un invasore nel suo regno, sul sito libero più alto. Se non c'è posto, l'invasore prende il posto del villaggio sul sito più alto e scoppia una Guerra. Non avviene in un regno pacificato."},
-	"fanteria": {"normale": "Nel regno raggiunto elimina 1 invasore e costruisci 1 tuo villaggio sul sito libero più basso. Non in un regno in guerra.",
-		"potenziata": "Elimina 2 invasori e costruisci 2 tuoi villaggi. In alternativa entra in un regno in guerra e dichiara battaglia: si risolve nella fase passiva. In battaglia la Fanteria dà +1.",
+	"fanteria": {"normale": "Nel regno raggiunto elimina 1 invasore e costruisci 1 tuo villaggio sul sito libero più basso. Oppure entra in un regno in guerra e dichiara battaglia: si risolve nella fase passiva (la Fanteria dà +1).",
+		"potenziata": "Elimina 2 invasori e costruisci 2 tuoi villaggi. Non in un regno in guerra.",
 		"passiva": "Se è stata dichiarata battaglia, si risolve la battaglia."},
-	"cavalleria": {"normale": "Muove di 1 o 2 regni (senza tornare alla partenza, senza porti). Nel regno raggiunto elimina 1 invasore e costruisci 1 tuo villaggio sul sito libero più basso. Non in un regno in guerra.",
-		"potenziata": "Elimina 2 invasori e costruisci 2 tuoi villaggi. In alternativa entra in un regno in guerra e dichiara battaglia: si risolve nella fase passiva. Nessun bonus in battaglia.",
+	"cavalleria": {"normale": "Muove di 1 o 2 regni (senza tornare alla partenza, senza porti). Nel regno raggiunto elimina 1 invasore e costruisci 1 tuo villaggio sul sito libero più basso. Oppure entra in un regno in guerra e dichiara battaglia (nessun bonus).",
+		"potenziata": "Elimina 2 invasori e costruisci 2 tuoi villaggi. Non in un regno in guerra.",
 		"passiva": "Se è stata dichiarata battaglia, si risolve la battaglia."},
 }
 

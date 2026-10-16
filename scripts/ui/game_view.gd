@@ -854,8 +854,12 @@ func _after_dest() -> void:
 func _king_pw_cand() -> Array:
 	var out := []
 	var d := _dest()
+	var adj_used := -1
+	for x in sel.get("pl", []):
+		if int(x[0]) != d:
+			adj_used = int(x[0])
 	for r in [d] + engine.st.land[d]:
-		if engine.st._king_region_ok(r, true):
+		if engine.st._king_region_ok(r, true) and (adj_used == -1 or r == d or r == adj_used):
 			out.append(r)
 	return out
 

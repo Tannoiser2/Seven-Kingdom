@@ -105,6 +105,9 @@ func setup(p_names: Array, scenario: Dictionary, p_opts: Dictionary, seed_value:
 		chars[c] = tile_index[scen["start"][c]]
 	# la Capitale parte da 3 di Ricchezza, gli altri regni da 2
 	regions[tile_index["capitale"]]["econ"] = 3
+	# dove parte la Spia un invasore, dove parte il Papa un'influenza religiosa sul 5
+	_add_invader(chars["spia"], false)
+	_place_influence(chars["papa"])
 	# risorse a caso su tutti i siti
 	var bag := []
 	for t in SKData.RESOURCES:
@@ -113,10 +116,8 @@ func setup(p_names: Array, scenario: Dictionary, p_opts: Dictionary, seed_value:
 	_shuffle(bag)
 	for r in regions:
 		for i in r["sites"].size():
-			r["res"][i] = bag.pop_back()
-	# dove parte la Spia un invasore, dove parte il Papa un'influenza religiosa sul 5
-	_add_invader(chars["spia"], false)
-	_place_influence(chars["papa"])
+			if r["sites"][i] == -1:
+				r["res"][i] = bag.pop_back()
 	first = 0
 	objectives.clear()
 	for p in n:
@@ -156,7 +157,7 @@ func clone() -> SKState:
 	s.objectives = objectives
 	s.game_over = game_over
 	s.end_reason = end_reason
-	s.rng.seed = rng.randi()
+	s.rng.state = rng.state
 	s.quiet = true
 	return s
 
@@ -512,6 +513,7 @@ func setup_place(p: int, r: int) -> void:
 	_put(r, i, p)
 	ev("place", {"r": r, "i": i, "p": p})
 	log_msg("%s pone un villaggio in %s." % [pname(p), rname(r)])
+	_check_peace(r)
 
 
 func available_chars() -> Array:
@@ -647,6 +649,8 @@ func check_move(p: int, m: Dictionary) -> String:
 		"spia":
 			if not m.has("a"):
 				return ""
+			if not m.has("b"):
+				return "scegli il secondo villaggio da scambiare"
 			var a: Array = m["a"]
 			var b: Array = m["b"]
 			if int(a[0]) != dest:
@@ -660,6 +664,8 @@ func check_move(p: int, m: Dictionary) -> String:
 			if m.get("battle", false):
 				if not regions[dest]["war"]:
 					return "si dà battaglia solo in un regno in guerra"
+				if pw:
+					return "per dare battaglia non serve l'azione potenziata (il Favore lo tieni per il +1)"
 			return ""
 	return ""
 
@@ -682,11 +688,16 @@ func _check_king(p: int, dest: int, pw: bool, pl: Array) -> String:
 		if pl.size() != max_n:
 			return "con l'azione potenziata il Re mette 2 villaggi"
 		var cnt := {}
+		var adj_used := -1
 		for x in pl:
 			var r := int(x[0])
 			var o := int(x[1])
 			if not cand.has(r) or not _king_region_ok(r, true):
 				return "regno non consentito"
+			if r != dest:
+				if adj_used != -1 and adj_used != r:
+					return "al massimo un regno adiacente oltre a quello del Re"
+				adj_used = r
 			if o < 0 or o >= n:
 				return "colore non valido"
 			cnt[o] = cnt.get(o, 0) + 1
@@ -979,6 +990,8 @@ func end_phase(_ch = null) -> void:
 			log_msg("Invasione! Gli invasori dilagano in %s, lasciato senza personaggi." % rname(r))
 	used.clear()
 	turn += 1
+	# tre guerre o un regno pieno di invasori fanno terminare subito la partita
+	check_end()
 
 
 ## Controllo di fine gioco. Restituisce true (e imposta game_over) se la partita è finita.

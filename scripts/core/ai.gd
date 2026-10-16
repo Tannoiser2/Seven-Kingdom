@@ -164,6 +164,9 @@ func _moves_for(st: SKState, p: int, c: String, path: Array, dest: int, pw: bool
 					out.append(base)
 				for i in cand.size():
 					for j in range(i, cand.size()):
+						# al massimo un regno adiacente oltre a quello del Re
+						if cand[i] != dest and cand[j] != dest and cand[i] != cand[j]:
+							continue
 						var m := base.duplicate()
 						m["pl"] = [[cand[i], p], [cand[j], p]]
 						out.append(m)
@@ -265,10 +268,10 @@ func _moves_for(st: SKState, p: int, c: String, path: Array, dest: int, pw: bool
 						out.append(m)
 		"fanteria", "cavalleria":
 			if st.regions[dest]["war"]:
-				var m := base.duplicate()
-				m["battle"] = true
-				out.append(m)
 				if not pw:
+					var m := base.duplicate()
+					m["battle"] = true
+					out.append(m)
 					out.append(base)
 			else:
 				out.append(base)
