@@ -105,9 +105,6 @@ func setup(p_names: Array, scenario: Dictionary, p_opts: Dictionary, seed_value:
 		chars[c] = tile_index[scen["start"][c]]
 	# la Capitale parte da 3 di Ricchezza, gli altri regni da 2
 	regions[tile_index["capitale"]]["econ"] = 3
-	# dove parte la Spia un invasore, dove parte il Papa un'influenza religiosa sul 5
-	_add_invader(chars["spia"], false)
-	_place_influence(chars["papa"])
 	# risorse a caso su tutti i siti
 	var bag := []
 	for t in SKData.RESOURCES:
@@ -116,8 +113,10 @@ func setup(p_names: Array, scenario: Dictionary, p_opts: Dictionary, seed_value:
 	_shuffle(bag)
 	for r in regions:
 		for i in r["sites"].size():
-			if r["sites"][i] == -1:
-				r["res"][i] = bag.pop_back()
+			r["res"][i] = bag.pop_back() if not bag.is_empty() else ""
+	# poi, dove parte la Spia un invasore (che distrugge la risorsa del suo sito), dove parte il Papa un'influenza religiosa sul 5
+	_add_invader(chars["spia"], false)
+	_place_influence(chars["papa"])
 	first = 0
 	objectives.clear()
 	for p in n:

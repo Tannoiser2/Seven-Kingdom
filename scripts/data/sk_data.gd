@@ -27,7 +27,8 @@ const START_PLACEMENTS := 3
 const RESOURCES := ["legno", "pietra", "grano", "ferro", "oro"]
 const RES_NAME := {"legno": "Legno", "pietra": "Pietra", "grano": "Grano", "ferro": "Ferro", "oro": "Oro"}
 const RES_COLOR := {"legno": Color("#9a5b2c"), "pietra": Color("#9a9a96"), "grano": Color("#d9b048"), "ferro": Color("#5b5f66"), "oro": Color("#e8b92f")}
-const RES_PER_TYPE := 10
+## 45 risorse (9 per tipo): coprono tutti i 45 siti dei sette regni.
+const RES_PER_TYPE := 9
 ## Punti di fine partita per ogni tipo di risorsa: primo, secondo, terzo.
 const RES_PRIZES := [5, 3, 1]
 

@@ -9,7 +9,7 @@ azione passiva, e alla fine del turno gli invasori dilagano nei regni rimasti se
 
 ## Cosa c'è
 - **Regole complete** del regolamento italiano, con le **risorse** di Seven Planet (legno, pietra, grano, ferro,
-  oro): stanno sui siti, le prende chi ci costruisce, il Mercante le ruba agli avversari, a fine partita valgono
+  oro, 9 per tipo): coprono tutti i 45 siti, le prende chi ci costruisce, gli invasori le distruggono, il Mercante le ruba agli avversari, a fine partita valgono
   5/3/1 punti per tipo. Il Mercato non c'è più.
 - **Carte obiettivo** (le 27 illustrate, con i regni indicati per nome) e **guerra con dado**, entrambe opzionali.
 - **Mappe**: *Il Regno dei Sette* (la mappa del gioco originale, 11 ponti e 4 porti), *La Corona di Regni*,

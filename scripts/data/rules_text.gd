@@ -10,7 +10,7 @@ Ogni regno ha una traccia di [b]siti[/b] numerati: il sito 1, con la corona, è 
 Le mappe si scelgono nel menu (Il Regno dei Sette è quella del gioco originale) e se ne possono inventare di nuove con l'editor.
 
 [b]PREPARAZIONE[/b]
-Ricchezza 2 in ogni regno, 3 nella Capitale. Dove parte la Spia c'è un invasore; dove parte il Papa un'influenza religiosa sul 5. Su tutti i siti si mettono a caso i segnalini [b]risorsa[/b] (legno, pietra, grano, ferro, oro). A turno, dal Primo Giocatore, ognuno mette per tre giri un villaggio sul sito libero più basso di un regno a scelta e prende la risorsa che c'era. L'ultimo giocatore riceve un Favore Papale.
+Ricchezza 2 in ogni regno, 3 nella Capitale. Su tutti i 45 siti si mettono a caso i 45 segnalini [b]risorsa[/b] (9 ciascuno di legno, pietra, grano, ferro, oro); poi dove parte la Spia arriva un invasore (che distrugge la risorsa del suo sito) e dove parte il Papa un'influenza religiosa sul 5. A turno, dal Primo Giocatore, ognuno mette per tre giri un villaggio sul sito libero più basso di un regno a scelta e prende la risorsa che c'era. L'ultimo giocatore riceve un Favore Papale.
 Con le [b]carte obiettivo[/b] ognuno ne pesca 3 e ne tiene una, segreta.
 
 [b]IL TURNO[/b]
@@ -45,5 +45,8 @@ Ogni Governatore vale il numero più alto della Ricchezza non coperto dall'influ
 · Il Re potenziato mette ogni villaggio sul primo sito dopo il Governatore (se entrambi nello stesso regno, sul 2 e sul 3).
 · La Ricchezza è «tutta coperta» quando ha 5 influenze religiose (l'indicatore scende a 0).
 · La Spia scambia solo villaggi dei giocatori, non invasori.
-· Se c'è parità di maggioranza e il Governatore non è fra i pari merito, sceglie comunque lui fra i pari; se non c'è Governatore nessuno ha la maggioranza.
+· Gli invasori distruggono la risorsa del sito che occupano.
+· Un esercito si può scegliere anche solo per spostarlo, se nel regno non ci sono invasori da scacciare.
+· Senza Governatore (sito 1 vuoto o di un invasore) una parità non si risolve: nessuno ha la maggioranza.
+· Se c'è parità di maggioranza decide il Governatore fra i pari merito.
 """
