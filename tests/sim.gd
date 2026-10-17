@@ -20,6 +20,11 @@ func _init() -> void:
 	var res_left := 0
 	var win_art := {}
 	var alch_used := 0
+	var alch_pw := 0
+	var alch_turn := {}
+	var built_hist := {}
+	var drawn := 0
+	var games_with_alch := 0
 	for g in games:
 		var players := []
 		for i in levels.size():
@@ -35,12 +40,25 @@ func _init() -> void:
 		turns += eng.st.turn
 		for d in rk:
 			pts[d["p"]] = pts.get(d["p"], 0) + d["tot"]
+		var tcur := 0
+		var any_a := false
 		for l in eng.st.log_lines:
+			if l.begins_with("— Turno "):
+				tcur = int(l.split(" ")[2])
 			if l.contains("sceglie L'Alchimista") or l.contains("sceglie Il Mercante"):
 				alch_used += 1
+				any_a = true
+				alch_turn[tcur] = alch_turn.get(tcur, 0) + 1
+				if l.contains("(potenziata)"):
+					alch_pw += 1
+		if any_a:
+			games_with_alch += 1
 		if opts["alchemist"]:
 			var stt: SKState = eng.st
+			drawn += 24 - stt.deck.size()
 			for q in stt.n:
+				var nb: int = stt.built[q].size()
+				built_hist[nb] = built_hist.get(nb, 0) + 1
 				pj_pts += stt.proj_points(q)
 				ord_pts += stt.score(q) - stt.proj_points(q)
 				res_left += stt.total_res(q)
@@ -66,7 +84,11 @@ func _init() -> void:
 	print("vittorie per posto: ", wins)
 	print("punti medi: ", pts.keys().map(func(k): return "%d=%.1f" % [k, float(pts[k]) / games]))
 	print("fine per: ", reasons)
-	print("Mercante/Alchimista scelto in media %.1f volte a partita" % (float(alch_used) / games))
+	print("Mercante/Alchimista scelto in media %.2f volte a partita (potenziata %d volte su %d); partite in cui viene scelto almeno una volta: %d su %d" % [float(alch_used) / games, alch_pw, alch_used, games_with_alch, games])
+	print("  scelte per turno: ", alch_turn)
+	if opts["alchemist"]:
+		print("progetti pescati in media a partita (compresi quelli iniziali): %.1f" % (float(drawn) / games))
+		print("progetti realizzati per giocatore (quanti giocatori ne hanno realizzati 0, 1, 2…): ", built_hist)
 	if opts["alchemist"]:
 		var np: int = games * levels.size()
 		print("PV medi a giocatore: progetti %.1f, ordinari %.1f; risorse rimaste %.1f" % [float(pj_pts) / np, float(ord_pts) / np, float(res_left) / np])
