@@ -1072,13 +1072,6 @@ func refresh(animate := true) -> void:
 		if rg["bishop"] >= 0:
 			want["b%d" % r] = true
 			_place("b%d" % r, "bishop", int(rg["bishop"]), bishop_pos(r), animate)
-		var ts: Array = token_spots[r]
-		if rg["war"]:
-			want["w%d" % r] = true
-			_place("w%d" % r, "war", 1, tile_point(r, ts[0].x, ts[0].y), animate)
-		if rg["peace"]:
-			want["p%d" % r] = true
-			_place("p%d" % r, "peace", 1, tile_point(r, ts[1].x, ts[1].y), animate)
 	# personaggi: ognuno al suo posto nel regno
 	var per_region := {}
 	for c in SKData.CHARS:
@@ -1179,15 +1172,13 @@ func _rebuild_fx(st: SKState) -> void:
 				if rg["sites"][i] != -1 and burning < 3:
 					holder.add_child(_fire(site_pos(r, i)))
 					burning += 1
-			var sw := _swords(region_center[r] + Vector3(0, 0.75, 0))
-			sw.scale = Vector3.ONE * 1.9
+			var sw := _swords(region_center[r] + Vector3(0, 0.75 if map3d else 0.2, 0), not map3d)
+			sw.scale = Vector3.ONE * (1.9 if map3d else 2.6)
 			holder.add_child(sw)
-			holder.add_child(_border_fx(r, true))
 		else:
 			var sun := _sun(region_center[r] + Vector3(0.25, 0.85, -0.22))
 			sun.scale = Vector3.ONE * 2.2
 			holder.add_child(sun)
-			holder.add_child(_border_fx(r, false))
 			for k in 3:
 				var dv := _dove()
 				dv.set_meta("c", region_center[r])
@@ -1306,9 +1297,14 @@ func _fire(at: Vector3) -> Node3D:
 	return n
 
 
-func _swords(at: Vector3) -> Node3D:
+func _swords(at: Vector3, flat := false) -> Node3D:
 	var n := Node3D.new()
 	n.position = at
+	# nella mappa 2D (vista dall'alto) le spade stanno distese, così si vedono intere
+	var inner := Node3D.new()
+	if flat:
+		inner.rotation.x = -PI / 2.0
+	n.add_child(inner)
 	var steel := _mat(Color("#d8dde3"), 0.25, 0.9)
 	var gold := _mat(Color("#d9a92e"), 0.3, 1.0)
 	var grip := _mat(Color("#5a2a1a"), 0.8)
@@ -1346,7 +1342,7 @@ func _swords(at: Vector3) -> Node3D:
 		pom.material_override = gold
 		pom.position.y = -0.17
 		sw.add_child(pom)
-		n.add_child(sw)
+		inner.add_child(sw)
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.3, 0.2)
 	l.light_energy = 0.6
