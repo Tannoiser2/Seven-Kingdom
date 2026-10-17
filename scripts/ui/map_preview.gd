@@ -92,7 +92,7 @@ func _draw() -> void:
 		var em := SKData.edge_mid(int(pt["edge"]))
 		var outward := em.normalized()
 		var w := R * 0.68
-		var d := w * 275.0 / 420.0
+		var d := w * 292.0 / 420.0
 		var ctr := c3 + em * R * 0.955 + outward * d / 2.0
 		pp[pt["id"]] = ctr + outward * d / 2.0
 		var tex := UI.tex("res://assets/tokens/porto_%s.webp" % pt["id"])

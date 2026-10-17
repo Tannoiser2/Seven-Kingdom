@@ -90,14 +90,51 @@ def split_white(im, n_cols, n_rows, thr=245):
     return res
 
 
+def pdf_images(pdf):
+    """Immagini incorporate in un PDF, nell'ordine (senza i duplicati della stessa immagine)."""
+    import subprocess, tempfile, glob, hashlib
+    d = tempfile.mkdtemp()
+    subprocess.run(["pdfimages", "-png", pdf, os.path.join(d, "i")], check=True)
+    out, seen = [], set()
+    for f in sorted(glob.glob(os.path.join(d, "i-*.png"))):
+        h = hashlib.md5(open(f, "rb").read()).hexdigest()
+        if h not in seen:
+            seen.add(h)
+            out.append(Image.open(f).convert("RGB"))
+    return out
+
+
+def white_alpha(im, thr=238):
+    """Toglie il fondo bianco che tocca il bordo dell'immagine."""
+    from scipy import ndimage
+    a = np.asarray(im.convert("RGB")).astype(int)
+    white = a.min(axis=2) > thr
+    lab, n = ndimage.label(white)
+    edge = set(np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))) - {0}
+    bg = ndimage.binary_dilation(np.isin(lab, list(edge)), iterations=1)
+    o = im.convert("RGBA")
+    o.putalpha(Image.fromarray(np.where(bg, 0, 255).astype(np.uint8)))
+    return crop_alpha(o, 0)
+
+
+V03_REGNI = "Seven_Kingdom_7_Regni_Illustrati_A4_v03.pdf"
+V03_PORTI = "Seven_Kingdom_4_Porti_A4_v03.pdf"
+V03_PATTI = "Seven_Kingdom_16_Patti_A4_v03.pdf"
+
+
 def main():
     # tessere dei regni
     names = {"01_Capitale_9_siti": "capitale", "02_Regno_Boschivo_7_siti": "boschivo", "03_Regno_Fluviale_7_siti": "fluviale",
              "04_Regno_Montano_6_siti": "montano", "05_Regno_Autunnale_6_siti": "autunnale", "06_Regno_Collinare_5_siti": "collinare",
              "07_Regno_Palustre_5_siti": "palustre"}
-    for f, n in names.items():
-        im = Image.open(os.path.join(ILL, "01_Tessere", f + ".png")).convert("RGBA")
-        save(hex_alpha(im), out("tiles", n + ".webp"), q=86)
+    if os.path.exists(os.path.join(SRC, V03_REGNI)):
+        # grafica v0.3: un'immagine per regno, nell'ordine Capitale, Boschivo, Fluviale, Montano, Autunnale, Collinare, Palustre
+        for im, n in zip(pdf_images(os.path.join(SRC, V03_REGNI)), list(names.values())):
+            save(hex_alpha(im.convert("RGBA")), out("tiles", n + ".webp"), q=86)
+    else:
+        for f, n in names.items():
+            im = Image.open(os.path.join(ILL, "01_Tessere", f + ".png")).convert("RGBA")
+            save(hex_alpha(im), out("tiles", n + ".webp"), q=86)
     # tabellone del mare
     im = Image.open(os.path.join(ILL, "02_Tabellone", "Tabellone_Mare_10_Posizioni_Titolo.png")).convert("RGB")
     save(im, out("board", "mare.webp"), q=84)
@@ -127,10 +164,17 @@ def main():
     save(row2[2], out("tokens", "porto_II.webp"), (192, 192))
     for i, c in enumerate(cols):
         save(crop_alpha(im.crop((i * W // 4, int(H * 0.645), (i + 1) * W // 4, H))), out("tokens", "azione_%s.webp" % c), (192, 192))
-    # porti grandi (cartigli)
-    im = Image.open(os.path.join(ILL, "b32ee478-0d12-4d42-b542-7c04b236fb33.png")).convert("RGBA")
-    for t, n in zip(grid(im, 2, 2), ["alba", "vespro", "rupe", "bruma"]):
-        save(t, out("tokens", "porto_%s.webp" % n), (420, 300))
+    # tessere dei porti
+    if os.path.exists(os.path.join(SRC, V03_PORTI)):
+        im = pdf_images(os.path.join(SRC, V03_PORTI))[0]
+        W, H = im.size
+        for k, n in enumerate(["alba", "vespro", "rupe", "bruma"]):
+            c = im.crop(((k % 2) * W // 2, (k // 2) * H // 2, (k % 2 + 1) * W // 2, (k // 2 + 1) * H // 2))
+            save(white_alpha(c), out("tokens", "porto_%s.webp" % n), (420, 300))
+    else:
+        im = Image.open(os.path.join(ILL, "b32ee478-0d12-4d42-b542-7c04b236fb33.png")).convert("RGBA")
+        for t, n in zip(grid(im, 2, 2), ["alba", "vespro", "rupe", "bruma"]):
+            save(t, out("tokens", "porto_%s.webp" % n), (420, 300))
     # personaggi: carte italiane e ritratti (dalle illustrazioni delle miniature)
     cards = ["01_Re", "02_Papa", "03_Mercante", "04_Spia", "05_Fanteria", "06_Cavalleria"]
     for c in cards:
@@ -152,7 +196,19 @@ def main():
         for c in split_white(im, 3, 3):
             save(c, out("cards/obiettivi", "O%02d.webp" % k), (420, 600))
             k += 1
-    print("fatto:", k - 1, "obiettivi")
+    # i 16 Patti dei tre regni v0.3 (O12-O27) sostituiscono i territoriali
+    if os.path.exists(os.path.join(SRC, V03_PATTI)):
+        k = 12
+        for im in pdf_images(os.path.join(SRC, V03_PATTI)):
+            W, H = im.size
+            for j in range(4):
+                c = im.crop(((j % 2) * W // 2, (j // 2) * H // 2, (j % 2 + 1) * W // 2, (j // 2 + 1) * H // 2))
+                a = np.asarray(c.convert("L"))
+                ys, xs = np.where(a < 235)
+                c = c.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+                save(c, out("cards/obiettivi", "O%02d.webp" % k), (420, 600))
+                k += 1
+    print("fatto")
 
 
 if __name__ == "__main__":

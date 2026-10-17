@@ -255,7 +255,7 @@ func _bridge(at: Vector3, dir: Vector2) -> Node3D:
 
 
 const PORT_W := 0.68
-const PORT_D := 0.68 * 275.0 / 420.0
+const PORT_D := 0.68 * 292.0 / 420.0
 
 ## Tessera del porto attaccata al lato dell'esagono: il pontile (in alto nell'immagine) tocca la tessera.
 func _port(id: String, at: Vector3, outward: Vector2) -> Node3D:
@@ -335,7 +335,8 @@ func site_pos(r: int, i: int) -> Vector3:
 
 
 func wealth_pos(r: int, slot: int) -> Vector3:
-	return tile_point(r, SKData.WEALTH_X[slot - 1], SKData.WEALTH_Y)
+	var wx: Array = SKData.TILES[eng.st.regions[r]["tile"]].get("wealth", SKData.WEALTH_X)
+	return tile_point(r, wx[slot - 1], SKData.WEALTH_Y)
 
 
 func bishop_pos(r: int) -> Vector3:
@@ -365,9 +366,7 @@ func _find_spots(r: int) -> void:
 			if dmin < 105:
 				continue
 			# fuori dalla traccia Ricchezza e dal cartiglio
-			if gy < 300 and gx > 380 and gx < 960:
-				continue
-			if gy > 990 and gx > 420 and gx < 920:
+			if gy < 280 and gx > 380 and gx < 960:
 				continue
 			cand.append([p, dmin])
 	cand.sort_custom(func(a, b): return a[1] > b[1])

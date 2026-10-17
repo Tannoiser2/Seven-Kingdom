@@ -10,16 +10,8 @@ from scipy import ndimage
 sys.path.insert(0, os.path.dirname(__file__))
 BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 W, H = 336, 293   # un quarto della risoluzione della tessera
-SITES = {
- "capitale": [[675, 606], [470, 388], [738, 320], [1014, 458], [956, 724], [817, 886], [548, 861], [331, 715], [308, 465]],
- "boschivo": [[672, 594], [454, 352], [896, 352], [1092, 602], [852, 848], [513, 848], [239, 602]],
- "fluviale": [[672, 596], [456, 352], [896, 352], [1092, 602], [852, 848], [513, 848], [239, 602]],
- "montano": [[672, 569], [422, 374], [954, 374], [940, 774], [672, 894], [398, 773]],
- "autunnale": [[672, 570], [422, 374], [952, 374], [941, 774], [672, 894], [398, 774]],
- "collinare": [[670, 614], [378, 426], [988, 426], [953, 834], [430, 834]],
- "palustre": [[670, 614], [378, 426], [988, 426], [954, 834], [430, 835]],
-}
-BISHOP = {"capitale": [472, 658], "boschivo": [432, 689], "fluviale": [432, 689], "montano": [458, 634], "autunnale": [458, 640], "collinare": [390, 662], "palustre": [390, 662]}
+SITES = {"capitale": [[671, 585], [506, 367], [764, 366], [1014, 476], [988, 735], [804, 913], [537, 897], [316, 723], [305, 476]], "boschivo": [[670, 584], [505, 361], [805, 362], [1021, 550], [913, 795], [616, 899], [313, 717]], "fluviale": [[682, 596], [490, 384], [790, 384], [1005, 580], [870, 860], [578, 906], [322, 740]], "montano": [[672, 592], [494, 375], [847, 375], [1012, 681], [673, 892], [330, 680]], "autunnale": [[672, 580], [506, 373], [834, 373], [992, 580], [666, 889], [325, 729]], "collinare": [[677, 603], [509, 376], [837, 375], [857, 865], [464, 865]], "palustre": [[670, 609], [448, 378], [894, 378], [893, 861], [447, 861]]}
+BISHOP = {"capitale": [484, 647], "boschivo": [473, 613], "fluviale": [474, 628], "montano": [492, 649], "autunnale": [487, 642], "collinare": [481, 642], "palustre": [428, 623]}
 for name, sites in SITES.items():
     im = Image.open(os.path.join(BASE, "assets/tiles", name + ".webp")).convert("RGB").resize((W, H), Image.LANCZOS)
     a = np.asarray(im).astype(float) / 255.0
@@ -47,11 +39,11 @@ for name, sites in SITES.items():
         m = np.clip(d / (28 * sx), 0, 1)
         return m
     for (x, y) in sites:
-        mask = np.minimum(mask, flat_rect(x, y, 70, 70))
+        mask = np.minimum(mask, flat_rect(x, y, 75, 75))
     bx, by = BISHOP[name]
-    mask = np.minimum(mask, flat_rect(bx, by, 60, 60))
-    mask = np.minimum(mask, flat_rect(668, 194, 260, 70))   # Ricchezza
-    mask = np.minimum(mask, flat_rect(671, 1040, 230, 45))  # cartiglio del nome
+    mask = np.minimum(mask, flat_rect(bx, by, 65, 70))
+    mask = np.minimum(mask, flat_rect(670, 172, 250, 75))   # Ricchezza
+    mask = np.minimum(mask, flat_rect(671, 55, 150, 45))    # cartiglio del nome
     # bordo dell'esagono (lato in alto): distanza dal contorno
     cx, cy = W / 2, H / 2
     R = W / 2.0
