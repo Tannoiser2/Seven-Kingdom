@@ -185,12 +185,22 @@ const CHAR_COLOR := {"re": Color("#a31f24"), "papa": Color("#e9dcb5"), "mercante
 
 ## Riassunto di una riga delle azioni (normale, potenziata), mostrato sotto il ritratto.
 const CHAR_BRIEF := {
-	"re": ["2 villaggi qui + 1 in un regno adiacente, almeno uno di un altro colore.", "2 villaggi di qualsiasi colore al 2° (e 3°) posto."],
-	"papa": ["1 influenza religiosa qui o in un regno adiacente.", "Anche in guerra, e nomini un tuo Vescovo."],
+	"re": ["2 villaggi qui + 1 in un regno vicino, uno di un altro colore.", "2 villaggi di qualsiasi colore al 2° (e 3°) posto."],
+	"papa": ["1 influenza religiosa qui o in un regno vicino.", "Anche in guerra, e nomini un tuo Vescovo."],
 	"mercante": ["Ruba 1 risorsa a un avversario.", "Ruba 2 risorse a un avversario."],
-	"spia": ["Scambia un villaggio qui con uno adiacente (no Governatori).", "Scambia anche i Governatori."],
+	"spia": ["Scambia un villaggio qui con uno vicino (no Governatori).", "Scambia anche i Governatori."],
 	"fanteria": ["Scaccia 1 invasore e costruisci; o battaglia (+1).", "Scaccia 2 invasori e costruisci 2 villaggi."],
-	"cavalleria": ["Muove 1-2 (no porti): scaccia 1 invasore; o battaglia.", "Scaccia 2 invasori e costruisci 2 villaggi."],
+	"cavalleria": ["Muove 1-2 (no porti): scaccia 1 invasore e costruisci; o battaglia.", "Scaccia 2 invasori e costruisci 2 villaggi."],
+}
+
+## Riassunto della passiva, sotto il ritratto.
+const CHAR_PASSIVE := {
+	"re": "Chi ha la maggioranza qui dà la Corona.",
+	"papa": "Chi ha la maggioranza qui riceve il Favore.",
+	"mercante": "La Ricchezza di questo regno sale di 1.",
+	"spia": "Un invasore entra in questo regno.",
+	"fanteria": "Se c'è battaglia, si combatte (+1).",
+	"cavalleria": "Se c'è battaglia, si combatte.",
 }
 
 const CHAR_TEXT := {

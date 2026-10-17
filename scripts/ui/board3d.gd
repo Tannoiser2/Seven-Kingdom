@@ -7,6 +7,7 @@ extends Node3D
 signal region_clicked(r: int)
 signal site_clicked(r: int, i: int)
 signal hovered(r: int, i: int)
+signal info_requested(r: int, i: int)
 
 const TILE_SCALE := 0.955
 const TILE_D := 1.7466        # profondità della tessera (2 × 1172/1342)
@@ -36,6 +37,11 @@ var vals := {}                # chiave -> valore attuale
 var hl_regions: Array = []
 var hl_sites: Array = []      # [[r, i]]
 var hl_nodes: Array = []
+## Stato da mostrare al posto di quello vero (anteprima della mossa che si sta costruendo).
+var preview: SKState = null
+var hl_points: Array = []     # posizioni libere da illuminare (Vector3)
+var arrows: Array = []        # [da, a] regni: frecce dei movimenti possibili
+var frame_nodes: Array = []
 var hover_r := -1
 var hover_i := -1
 var models := {}
@@ -50,6 +56,7 @@ var ortho_size := 8.3
 var _drag := false
 var _rdrag := false
 var _moved := 0.0
+var _rmoved := 0.0
 var view_offset := Vector2.ZERO   # spostamento del centro di vista (per i pannelli laterali)
 
 
@@ -232,25 +239,51 @@ func _bridge(at: Vector3, dir: Vector2) -> Node3D:
 	var n := Node3D.new()
 	n.position = at + Vector3(0, 0.004, 0)
 	n.rotation.y = -atan2(dir.y, dir.x) + PI / 2.0
-	var q := MeshInstance3D.new()
-	if map3d:
-		var bm := BoxMesh.new()
-		bm.size = Vector3(0.15, 0.03, 0.30)
-		q.mesh = bm
-		q.position.y = 0.0
-	else:
+	if not map3d:
+		var q := MeshInstance3D.new()
 		var pm := PlaneMesh.new()
 		pm.size = Vector2(0.15, 0.30)
 		q.mesh = pm
-	var m := StandardMaterial3D.new()
-	m.albedo_texture = UI.tex("res://assets/tokens/ponte.webp")
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-	m.uv1_scale = Vector3(3, 2, 1) if map3d else Vector3(1, 1, 1)
-	if map3d:
-		m.uv1_scale = Vector3(1, 1, 1)
-		m.uv1_triplanar = false
-	q.material_override = m
-	n.add_child(q)
+		var m := StandardMaterial3D.new()
+		m.albedo_texture = UI.tex("res://assets/tokens/ponte.webp")
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		q.material_override = m
+		n.add_child(q)
+		return n
+	# ponte di pietra a schiena d'asino: due rampe, tavolato e parapetti
+	var stone := _mat(Color("#9c958a"), 0.95)
+	var wood := StandardMaterial3D.new()
+	wood.albedo_texture = UI.tex("res://assets/tokens/ponte.webp")
+	wood.roughness = 0.9
+	for side in [-1.0, 1.0]:
+		var half := Node3D.new()
+		half.position = Vector3(0, 0.025, side * 0.075)
+		half.rotation.x = side * deg_to_rad(-11.0)
+		n.add_child(half)
+		var deck := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.13, 0.025, 0.16)
+		deck.mesh = bm
+		deck.material_override = wood
+		half.add_child(deck)
+		for wx in [-0.07, 0.07]:
+			var wall := MeshInstance3D.new()
+			var wm := BoxMesh.new()
+			wm.size = Vector3(0.016, 0.05, 0.16)
+			wall.mesh = wm
+			wall.material_override = stone
+			wall.position = Vector3(wx, 0.02, 0)
+			half.add_child(wall)
+	# pile ai lati
+	for z in [-0.15, 0.15]:
+		for wx in [-0.07, 0.07]:
+			var post := MeshInstance3D.new()
+			var cm := BoxMesh.new()
+			cm.size = Vector3(0.024, 0.07, 0.024)
+			post.mesh = cm
+			post.material_override = stone
+			post.position = Vector3(wx, 0.035, z)
+			n.add_child(post)
 	return n
 
 
@@ -601,6 +634,110 @@ func _square(path: String, d: float, thick: float, side: Color) -> Node3D:
 	return holder
 
 
+## Indicatore della Ricchezza: una grossa moneta d'oro.
+func _coin() -> Node3D:
+	var n := Node3D.new()
+	var cy := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.045
+	cm.bottom_radius = 0.045
+	cm.height = 0.022
+	cm.radial_segments = 32
+	cy.mesh = cm
+	cy.material_override = _mat(Color("#d9a92e"), 0.3, 1.0)
+	cy.position.y = 0.011
+	n.add_child(cy)
+	var rim := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.037
+	tm.outer_radius = 0.046
+	rim.mesh = tm
+	rim.material_override = _mat(Color("#f2c84e"), 0.25, 1.0)
+	rim.position.y = 0.022
+	n.add_child(rim)
+	var face := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(0.074, 0.074)
+	face.mesh = pm
+	var fm := StandardMaterial3D.new()
+	fm.albedo_texture = UI.tex("res://assets/tokens/ricchezza.webp")
+	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	fm.metallic = 0.6
+	fm.roughness = 0.35
+	face.material_override = fm
+	face.position.y = 0.0225
+	n.add_child(face)
+	return n
+
+
+## Influenza religiosa: una piccola mitria bianca e oro su una base rotonda.
+func _mitre() -> Node3D:
+	var n := Node3D.new()
+	var white := _mat(Color("#f4efe2"), 0.6)
+	var gold := _mat(Color("#d9a92e"), 0.3, 1.0)
+	var base := MeshInstance3D.new()
+	var bm := CylinderMesh.new()
+	bm.top_radius = 0.04
+	bm.bottom_radius = 0.042
+	bm.height = 0.012
+	base.mesh = bm
+	base.material_override = gold
+	base.position.y = 0.006
+	n.add_child(base)
+	var body := MeshInstance3D.new()
+	var pm := PrismMesh.new()
+	pm.size = Vector3(0.05, 0.075, 0.028)
+	body.mesh = pm
+	body.material_override = white
+	body.position.y = 0.012 + 0.0375
+	n.add_child(body)
+	var band := MeshInstance3D.new()
+	var bx := BoxMesh.new()
+	bx.size = Vector3(0.008, 0.06, 0.03)
+	band.mesh = bx
+	band.material_override = gold
+	band.position.y = 0.012 + 0.03
+	n.add_child(band)
+	var cross := MeshInstance3D.new()
+	var cb := BoxMesh.new()
+	cb.size = Vector3(0.022, 0.006, 0.031)
+	cross.mesh = cb
+	cross.material_override = gold
+	cross.position.y = 0.012 + 0.03
+	n.add_child(cross)
+	return n
+
+
+## Pedina 2D di un personaggio: un grande gettone rotondo con il ritratto.
+func _portrait_token(c: String) -> Node3D:
+	var n := Node3D.new()
+	var d := 0.34
+	var ring := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = d / 2.0
+	cm.bottom_radius = d / 2.0
+	cm.height = 0.012
+	cm.radial_segments = 40
+	ring.mesh = cm
+	ring.material_override = _mat(Color("#c99a3a"), 0.35, 0.8)
+	ring.position.y = 0.006
+	n.add_child(ring)
+	var q := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(d * 0.9, d * 0.9)
+	q.mesh = pm
+	var m := ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = PORTRAIT_SHADER
+	m.shader = sh
+	m.set_shader_parameter("tex", UI.tex("res://assets/chars/%s_art.webp" % c))
+	m.set_shader_parameter("ring", SKData.CHAR_COLOR[c])
+	q.material_override = m
+	q.position.y = 0.0125
+	n.add_child(q)
+	return n
+
+
 func _mat(c: Color, rough := 0.7, metal := 0.0) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = c
@@ -766,22 +903,64 @@ func _make(kind: String, v) -> Node3D:
 				_tint(m, p)
 				return m
 			return _sprite("res://assets/tokens/villaggio_%s.webp" % UI.cid(p), 0.19, false)
+		"gov":
+			# il Governatore (sito 1): in 3D un vero palazzo con torri e mura
+			var pg: int = v
+			if not pieces3d:
+				return _make("vil", v)
+			var pal := _fit(_model("palazzo"), 0.0, 0.31, true, "palazzo")
+			if pg == SKState.INV:
+				_tint_dark(pal)
+				var cp2 := _camp3d()
+				cp2.scale = Vector3.ONE * 3.0
+				var hold2 := Node3D.new()
+				hold2.add_child(pal)
+				hold2.add_child(cp2)
+				return hold2
+			_tint(pal, pg)
+			# basamento e stendardo del colore del casato: il palazzo è in gran parte di pietra
+			var holdp := Node3D.new()
+			var plinth := MeshInstance3D.new()
+			var pb := BoxMesh.new()
+			pb.size = Vector3(0.3, 0.016, 0.3)
+			plinth.mesh = pb
+			plinth.material_override = _mat(UI.pcol(pg), 0.55)
+			plinth.position.y = 0.008
+			holdp.add_child(plinth)
+			pal.position.y = 0.016
+			holdp.add_child(pal)
+			return holdp
 		"res":
 			if pieces3d:
+				# basetta quadrata col colore della risorsa e il modello 3D sopra
 				var hold := Node3D.new()
-				var base := _square("res://assets/res/%s.webp" % v, 0.15, 0.01, SKData.RES_COLOR[v].darkened(0.35))
-				base.position = Vector3(0.0, 0, 0.0)
+				var base := MeshInstance3D.new()
+				var bb := BoxMesh.new()
+				bb.size = Vector3(0.16, 0.014, 0.16)
+				base.mesh = bb
+				base.material_override = _mat(SKData.RES_COLOR[v].darkened(0.15), 0.6)
+				base.position.y = 0.007
 				hold.add_child(base)
-				var rs := _res3d(v)
-				rs.scale = Vector3.ONE * 1.9
-				rs.position = Vector3(0.0, 0.011, 0.0)
+				var top := MeshInstance3D.new()
+				var tb := BoxMesh.new()
+				tb.size = Vector3(0.14, 0.004, 0.14)
+				top.mesh = tb
+				top.material_override = _mat(Color("#efe2bf"), 0.85)
+				top.position.y = 0.016
+				hold.add_child(top)
+				var rs := _fit(_model("res_" + v), 0.0, 0.13, true, "res_" + v)
+				rs.position.y = 0.018
 				hold.add_child(rs)
 				return hold
 			return _sprite("res://assets/res/%s.webp" % v, 0.15, false)
 		"econ":
-			return _disc("res://assets/tokens/ricchezza.webp", 0.085, 0.012 if pieces3d else 0.0, Color("#b8892e"))
+			if pieces3d:
+				return _coin()
+			return _disc("res://assets/tokens/ricchezza.webp", 0.085, 0.0, Color("#b8892e"))
 		"infl":
-			return _disc("res://assets/tokens/influenza.webp", 0.085, 0.012 if pieces3d else 0.0, Color("#e9e2cf"))
+			if pieces3d:
+				return _mitre()
+			return _disc("res://assets/tokens/influenza.webp", 0.085, 0.0, Color("#e9e2cf"))
 		"bishop":
 			var p2: int = v
 			if pieces3d:
@@ -797,7 +976,7 @@ func _make(kind: String, v) -> Node3D:
 			var c: String = v
 			if pieces3d:
 				return _fit(_model(c), 0.42 if c != "cavalleria" else 0.44)
-			return _sprite(SKData.CHAR_PORTRAIT[c], 0.40, map3d)
+			return _portrait_token(c)
 	return Node3D.new()
 
 
@@ -819,6 +998,15 @@ func _place(key: String, kind: String, v, pos: Vector3, animate: bool, rot := 0.
 	root_pieces.add_child(n)
 	nodes[key] = n
 	vals[key] = v
+	# l'influenza religiosa e il Vescovo partono dal Papa e volano al loro posto
+	if animate and kind in ["infl", "bishop"] and nodes.has("c_papa"):
+		var from: Vector3 = nodes["c_papa"].position + Vector3(0, 0.35, 0)
+		n.position = from
+		var top := (from + pos) / 2.0 + Vector3(0, 0.5, 0)
+		var tw0 := n.create_tween()
+		tw0.tween_property(n, "position", top, 0.35).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw0.tween_property(n, "position", pos, 0.4).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+		return
 	if animate:
 		n.scale = Vector3.ONE * 0.01
 		n.position = pos + Vector3(0, 0.35, 0)
@@ -839,10 +1027,14 @@ func _remove(key: String, animate: bool) -> void:
 		n.queue_free()
 
 
+func view_st() -> SKState:
+	return preview if preview != null else eng.st
+
+
 func refresh(animate := true) -> void:
 	if eng == null:
 		return
-	var st: SKState = eng.st
+	var st: SKState = view_st()
 	var want := {}
 	for r in st.regions.size():
 		var rg: Dictionary = st.regions[r]
@@ -851,7 +1043,7 @@ func refresh(animate := true) -> void:
 			if p != -1:
 				var k := "v%d_%d" % [r, i]
 				want[k] = true
-				_place(k, "vil", p, site_pos(r, i), animate)
+				_place(k, "gov" if i == 0 else "vil", p, site_pos(r, i), animate)
 			elif rg["res"][i] != "":
 				var k2 := "r%d_%d" % [r, i]
 				want[k2] = true
@@ -896,14 +1088,29 @@ func refresh(animate := true) -> void:
 	for k in nodes.keys():
 		if not want.has(k):
 			_remove(k, animate)
+	_rebuild_frames(st)
 	_rebuild_hl()
+
+
+## Cornice del colore di chi ha la maggioranza nel regno (nessuna se è contesa o vuota).
+func _rebuild_frames(st: SKState) -> void:
+	for n in frame_nodes:
+		if is_instance_valid(n):
+			n.queue_free()
+	frame_nodes.clear()
+	for r in st.regions.size():
+		var w: int = st.majority_info(r)["w"]
+		if w >= 0:
+			frame_nodes.append(_hex_ring(r, UI.plight(w), 0.045, 0.012))
 
 
 # ------------------------------------------------------------------ evidenziazioni
 
-func set_highlight(regions: Array, sites_list: Array) -> void:
+func set_highlight(regions: Array, sites_list: Array, points := [], p_arrows := []) -> void:
 	hl_regions = regions.duplicate()
 	hl_sites = sites_list.duplicate()
+	hl_points = points.duplicate()
+	arrows = p_arrows.duplicate()
 	_rebuild_hl()
 
 
@@ -915,14 +1122,17 @@ func _rebuild_hl() -> void:
 	if eng == null:
 		return
 	for r in hl_regions:
-		hl_nodes.append(_hex_ring(r, Color("#ffd86a"), 0.06))
-	if hover_r >= 0 and not hl_regions.has(hover_r):
-		hl_nodes.append(_hex_ring(hover_r, Color(1, 1, 1, 0.5), 0.018))
+		hl_nodes.append(_hex_ring(r, Color("#ffd86a"), 0.06, 0.03))
+	for a in arrows:
+		hl_nodes.append(_arrow(int(a[0]), int(a[1]), hover_r == int(a[1])))
+	var pts: Array = hl_points.duplicate()
 	for s in hl_sites:
+		pts.append(site_pos(int(s[0]), int(s[1])))
+	for pos in pts:
 		var ring := MeshInstance3D.new()
 		var tm := TorusMesh.new()
-		tm.inner_radius = 0.062
-		tm.outer_radius = 0.078
+		tm.inner_radius = 0.105
+		tm.outer_radius = 0.13
 		tm.rings = 24
 		ring.mesh = tm
 		var m := StandardMaterial3D.new()
@@ -932,12 +1142,75 @@ func _rebuild_hl() -> void:
 		m.emission_energy_multiplier = 1.6
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		ring.material_override = m
-		ring.position = site_pos(int(s[0]), int(s[1])) + Vector3(0, 0.02, 0)
+		ring.position = pos + Vector3(0, 0.05, 0)
 		root_hl.add_child(ring)
 		hl_nodes.append(ring)
+		# disco luminoso semitrasparente: la casella «si accende»
+		var disc := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.105
+		cm.bottom_radius = 0.105
+		cm.height = 0.004
+		disc.mesh = cm
+		var dm := StandardMaterial3D.new()
+		dm.albedo_color = Color(1.0, 0.85, 0.3, 0.38)
+		dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		disc.material_override = dm
+		disc.position = pos + Vector3(0, 0.048, 0)
+		root_hl.add_child(disc)
+		hl_nodes.append(disc)
+		var tw := ring.create_tween().set_loops()
+		tw.tween_property(ring, "scale", Vector3.ONE * 1.12, 0.6).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(ring, "scale", Vector3.ONE, 0.6).set_trans(Tween.TRANS_SINE)
 
 
-func _hex_ring(r: int, col: Color, w: float) -> Node3D:
+## Freccia dorata dal regno a verso il regno b (movimento possibile).
+func _arrow(a: int, b: int, hot: bool) -> Node3D:
+	var pa: Vector3 = region_center[a]
+	var pb: Vector3 = region_center[b]
+	var d := Vector2(pb.x - pa.x, pb.z - pa.z)
+	var len := d.length()
+	var dir := d / maxf(0.001, len)
+	var start := Vector2(pa.x, pa.z) + dir * 0.42
+	var end := Vector2(pb.x, pb.z) - dir * 0.3
+	var l := start.distance_to(end)
+	var n := Node3D.new()
+	n.position = Vector3((start.x + end.x) / 2.0, base_y() + 0.07 + (0.03 if map3d else 0.0), (start.y + end.y) / 2.0)
+	n.rotation.y = atan2(dir.x, dir.y)
+	var col := Color("#fff1a8") if hot else Color("#f5c542")
+	var m := StandardMaterial3D.new()
+	m.albedo_color = col
+	m.emission_enabled = true
+	m.emission = col
+	m.emission_energy_multiplier = 1.4
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var w := 0.075 if not hot else 0.095
+	var shaft := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(w, 0.02, maxf(0.05, l - 0.2))
+	shaft.mesh = bm
+	shaft.material_override = m
+	shaft.position.z = -0.1
+	n.add_child(shaft)
+	var head := MeshInstance3D.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var hz := l / 2.0
+	for y in [0.01, -0.01]:
+		st.add_vertex(Vector3(-w * 1.9, y, hz - 0.22))
+		st.add_vertex(Vector3(w * 1.9, y, hz - 0.22))
+		st.add_vertex(Vector3(0, y, hz))
+	head.mesh = st.commit()
+	var hm := m.duplicate()
+	hm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	head.material_override = hm
+	n.add_child(head)
+	root_hl.add_child(n)
+	return n
+
+
+func _hex_ring(r: int, col: Color, w: float, lift := 0.03) -> Node3D:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var c: Vector3 = region_center[r]
@@ -964,7 +1237,7 @@ func _hex_ring(r: int, col: Color, w: float) -> Node3D:
 	m.emission_enabled = true
 	m.emission = col
 	mi.material_override = m
-	mi.position = Vector3(c.x, base_y() + (0.03 if map3d else 0.004), c.z)
+	mi.position = Vector3(c.x, base_y() + (lift if map3d else 0.004), c.z)
 	root_hl.add_child(mi)
 	return mi
 
@@ -975,6 +1248,8 @@ func _process(delta: float) -> void:
 	_t += delta
 	var pulse := 0.65 + 0.35 * sin(_t * 5.0)
 	for n in hl_nodes:
+		if is_instance_valid(n) and n is Node3D and n.get_child_count() > 0 and n.get_child(0) is MeshInstance3D:
+			n.position.y = base_y() + 0.07 + 0.03 * sin(_t * 4.0)
 		if is_instance_valid(n) and n is MeshInstance3D and n.material_override is StandardMaterial3D:
 			(n.material_override as StandardMaterial3D).emission_energy_multiplier = 0.6 + 1.6 * pulse
 	if map3d:
@@ -1041,6 +1316,11 @@ func handle_input(ev: InputEvent) -> void:
 					_click(mb.position)
 				_drag = false
 		elif mb.button_index == MOUSE_BUTTON_RIGHT or mb.button_index == MOUSE_BUTTON_MIDDLE:
+			if mb.pressed:
+				_rmoved = 0.0
+			elif _rdrag and _rmoved < 8.0 and mb.button_index == MOUSE_BUTTON_RIGHT:
+				var pk := pick(mb.position)
+				info_requested.emit(pk[0], pk[1])
 			_rdrag = mb.pressed
 	elif ev is InputEventMouseMotion:
 		var mm: InputEventMouseMotion = ev
@@ -1054,6 +1334,7 @@ func handle_input(ev: InputEvent) -> void:
 					_pan(mm.relative)
 				_update_cam()
 		elif _rdrag:
+			_rmoved += mm.relative.length()
 			_pan(mm.relative)
 			_update_cam()
 		else:
@@ -1099,7 +1380,7 @@ func pick(screen: Vector2) -> Array:
 		var k := 0.866
 		if absf(q.y) <= k and absf(q.x) * k + absf(q.y) * 0.5 <= k:
 			var best := -1
-			var bd := 0.085
+			var bd := 0.11
 			for i in st.regions[r]["sites"].size():
 				var sp := site_pos(r, i)
 				var d := Vector2(sp.x - p.x, sp.z - p.z).length()
@@ -1158,6 +1439,23 @@ void fragment() {
 	ALBEDO = c.rgb;
 	ROUGHNESS = 0.85;
 	SPECULAR = 0.2;
+}
+"""
+
+const PORTRAIT_SHADER := """
+shader_type spatial;
+render_mode unshaded;
+uniform sampler2D tex : source_color, filter_linear_mipmap;
+uniform vec4 ring : source_color = vec4(0.6, 0.1, 0.1, 1.0);
+void fragment() {
+	vec2 p = UV - vec2(0.5);
+	float r = length(p);
+	if (r > 0.5) discard;
+	// il ritratto (480×300) ritagliato al centro, un po' più in alto per il volto
+	vec2 uv = vec2(0.5 + p.x * 300.0 / 480.0, 0.42 + p.y);
+	vec3 c = texture(tex, uv).rgb;
+	float edge = smoothstep(0.43, 0.45, r);
+	ALBEDO = mix(c, ring.rgb, edge);
 }
 """
 

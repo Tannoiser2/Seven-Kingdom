@@ -16,8 +16,13 @@ azione passiva, e alla fine del turno gli invasori dilagano nei regni rimasti se
   *Le Terre di Ponente*, più l'**editor delle mappe** per inventarne di nuove (si salvano sul dispositivo e si
   condividono con un codice `SK1:…`).
 - **Mappa 3D** (tessere in rilievo ricavato dai dipinti, mare animato, telecamera libera) o **2D** dall'alto;
-  **pedine 3D** (miniature dei personaggi, villaggi e vescovi generati con Meshy dalle illustrazioni, ricolorati
-  per ogni casato; risorse, accampamenti e segnalini in 3D) o **2D** (i segnalini dipinti). Si cambia anche in partita.
+  **pedine 3D** (miniature dei personaggi, villaggi, vescovi, palazzi dei Governatori e risorse generati con Meshy,
+  ricolorati per ogni casato; ponti, Ricchezza, influenza religiosa e accampamenti in 3D) o **2D** (i segnalini
+  dipinti, i personaggi come grandi pedine rotonde col ritratto). Si cambia anche in partita.
+- **Mossa sulla mappa**: si sceglie il personaggio (Normale o Potenziata) nei riquadri accanto al ritratto, lo si
+  sposta seguendo le frecce e poi si toccano le caselle illuminate; il colore dei villaggi del Re si sceglie toccando
+  il riquadro del casato, le risorse da rubare col Mercante si toccano nel riquadro dell'avversario. Ogni regno ha
+  la cornice del colore di chi vi ha la maggioranza; le risorse e l'influenza religiosa si vedono volare a destinazione.
 - **IA** a tre livelli: Facile, Normale, Difficile (guarda anche le risposte degli avversari e il turno dopo).
 - **Hotseat** e **gioco online** su Firebase.
 

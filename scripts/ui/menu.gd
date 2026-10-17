@@ -21,7 +21,7 @@ var scens: Array = []
 
 const OPT_LIST := [
 	["objectives", "Carte obiettivo", "Ognuno pesca 3 carte obiettivo e ne tiene una in segreto: punti extra a fine partita (o la vittoria, per il Nemico e l'Usurpatore). Consigliate per le prime partite."],
-	["dice", "Guerra con dado", "Regola opzionale: in battaglia si tira un dado e si vince superando il numero di invasori (+1 Favore Papale, +1 Fanteria, +1 Governatore)."],
+	["dice", "Guerra col dado", "Regola opzionale: in battaglia si tira un dado e si vince superando il numero di invasori (+1 Favore Papale, +1 Fanteria, +1 Governatore)."],
 ]
 
 
@@ -55,95 +55,89 @@ func _build() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 	var shade := ColorRect.new()
-	shade.color = Color(0.03, 0.05, 0.1, 0.35)
+	shade.color = Color(0.03, 0.05, 0.1, 0.55)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(shade)
-	# la copertina della scatola, a destra
-	if vp.x >= 1500:
+	var wide := vp.x >= 1500
+	var right_x := 40.0
+	# a sinistra la copertina del regolamento
+	if wide:
+		var h := vp.y - 60.0
+		var w := h * 0.706
 		var box_art := TextureRect.new()
 		box_art.texture = UI.tex("res://assets/ui/copertina_scatola.webp")
 		box_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		box_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		var h := minf(vp.y - 60.0, (vp.x - 1420.0) / 0.706)
-		box_art.size = Vector2(h * 0.706, h)
-		box_art.position = Vector2(vp.x - h * 0.706 - 30.0, (vp.y - h) / 2.0)
+		box_art.size = Vector2(w, h)
+		box_art.position = Vector2(30, 30)
 		box_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(box_art)
+		right_x = w + 60.0
 	var sc := ScrollContainer.new()
 	sc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sc.offset_left = right_x
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	add_child(sc)
 	var outer := MarginContainer.new()
 	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for side in ["left", "right", "top", "bottom"]:
-		outer.add_theme_constant_override("margin_" + side, 40 if side != "top" else 24)
+		outer.add_theme_constant_override("margin_" + side, 30 if side != "left" else 0)
 	sc.add_child(outer)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 14)
 	outer.add_child(col)
-	var t := UI.label("Seven Kingdom", 84 if vp.x > 1200 else 54, UI.GOLD, UI.font_deco)
-	t.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
-	t.add_theme_constant_override("shadow_offset_x", 4)
-	t.add_theme_constant_override("shadow_offset_y", 4)
-	t.add_theme_color_override("font_outline_color", Color("#2a1708"))
-	t.add_theme_constant_override("outline_size", 8)
-	col.add_child(t)
-	var tag := UI.label("Sette regni, sei personaggi, una sola mossa per turno. Un gioco di Stefano & Simone Ancillai.", 24, UI.PARCH, UI.font_italic)
-	tag.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tag.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	tag.add_theme_constant_override("shadow_offset_x", 2)
-	tag.add_theme_constant_override("shadow_offset_y", 2)
-	col.add_child(tag)
-	var flow := HFlowContainer.new()
-	flow.add_theme_constant_override("h_separation", 20)
-	flow.add_theme_constant_override("v_separation", 20)
-	col.add_child(flow)
-	# casati al tavolo
+	var pw := minf(vp.x - right_x - 30.0, 1120.0)
+	if not wide:
+		var t := UI.label("Seven Kingdom", 54, UI.GOLD, UI.font_deco)
+		col.add_child(t)
+	# casati al tavolo e regole opzionali
 	var box := PanelContainer.new()
-	box.add_theme_stylebox_override("panel", UI.parchment(24))
-	box.custom_minimum_size = Vector2(minf(760, vp.x - 80), 0)
-	flow.add_child(box)
+	box.add_theme_stylebox_override("panel", UI.parchment(22))
+	box.custom_minimum_size = Vector2(pw, 0)
+	col.add_child(box)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 10)
 	box.add_child(vb)
-	vb.add_child(UI.title("I casati al tavolo", 30, UI.INK))
+	vb.add_child(UI.title("I casati al tavolo", 28, UI.INK))
 	rows = VBoxContainer.new()
 	rows.add_theme_constant_override("separation", 8)
 	vb.add_child(rows)
 	_refresh_rows()
-	var sp := HBoxContainer.new()
-	sp.add_theme_constant_override("separation", 8)
-	sp.add_child(UI.label("Velocità dell'IA:", 20, UI.INK, UI.font_bold))
-	for i in 4:
-		var b := UI.button(["Calma", "Normale", "Rapida", "Lampo"][i], 110, 38, 14)
-		if i == speed:
+	vb.add_child(_row("Velocità dell'IA:", ["Calma", "Normale", "Rapida", "Lampo"].map(func(x): return x), speed, func(i):
+		speed = i
+		_store()
+		_build()))
+	var orow := HBoxContainer.new()
+	orow.add_theme_constant_override("separation", 8)
+	var ol := UI.label("Regole opzionali:", 20, UI.INK, UI.font_bold)
+	ol.custom_minimum_size.x = 190
+	orow.add_child(ol)
+	for o in OPT_LIST:
+		var on: bool = opts.get(o[0], false)
+		var b := UI.button(o[1] + (": sì" if on else ": no"), 230, 40, 14)
+		if on:
 			UI.primary(b)
-		var ii := i
+		b.tooltip_text = o[2]
+		var key: String = o[0]
 		b.pressed.connect(func():
-			speed = ii
+			opts[key] = not opts.get(key, false)
 			_store()
 			_build())
-		sp.add_child(b)
-	vb.add_child(sp)
-	for o in OPT_LIST:
-		var cb := CheckBox.new()
-		cb.text = o[1]
-		cb.tooltip_text = o[2]
-		cb.button_pressed = opts.get(o[0], false)
-		var key: String = o[0]
-		cb.toggled.connect(func(on): opts[key] = on)
-		vb.add_child(cb)
+		orow.add_child(b)
+	vb.add_child(orow)
 	var vw := HBoxContainer.new()
 	vw.add_theme_constant_override("separation", 8)
-	vw.add_child(UI.label("Vista:", 20, UI.INK, UI.font_bold))
-	var bm := UI.button("Mappa 3D" if map3d else "Mappa 2D", 150, 38, 14)
+	var vl := UI.label("Vista:", 20, UI.INK, UI.font_bold)
+	vl.custom_minimum_size.x = 190
+	vw.add_child(vl)
+	var bm := UI.button("Mappa 3D" if map3d else "Mappa 2D", 150, 40, 14)
 	bm.pressed.connect(func():
 		map3d = not map3d
 		_store()
 		_build())
 	vw.add_child(bm)
-	var bp := UI.button("Pedine 3D" if pieces3d else "Pedine 2D", 150, 38, 14)
+	var bp := UI.button("Pedine 3D" if pieces3d else "Pedine 2D", 150, 40, 14)
 	bp.pressed.connect(func():
 		pieces3d = not pieces3d
 		_store()
@@ -154,41 +148,57 @@ func _build() -> void:
 	msg = UI.label("", 19, UI.RED, UI.font_bold)
 	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vb.add_child(msg)
-	# mappa
+	# la mappa
 	var box2 := PanelContainer.new()
-	box2.add_theme_stylebox_override("panel", UI.parchment(24))
-	box2.custom_minimum_size = Vector2(minf(560, vp.x - 80), 0)
-	flow.add_child(box2)
+	box2.add_theme_stylebox_override("panel", UI.parchment(22))
+	box2.custom_minimum_size = Vector2(pw, 0)
+	col.add_child(box2)
 	scen_box = VBoxContainer.new()
 	scen_box.add_theme_constant_override("separation", 10)
 	box2.add_child(scen_box)
 	_refresh_scen()
 	# pulsanti
 	var btns := HFlowContainer.new()
-	btns.add_theme_constant_override("h_separation", 14)
+	btns.add_theme_constant_override("h_separation", 12)
 	btns.add_theme_constant_override("v_separation", 12)
 	col.add_child(btns)
-	var play := UI.primary(UI.button("Gioca", 230, 62, 26))
+	var play := UI.primary(UI.button("Gioca", 180, 60, 26))
 	play.pressed.connect(_on_start)
 	btns.add_child(play)
-	var onl := UI.button("Gioca online", 270, 62, 24)
+	var onl := UI.button("Gioca online", 210, 60, 21)
 	onl.pressed.connect(_online_panel)
 	btns.add_child(onl)
-	var rul := UI.button("Regole", 190, 62, 24)
+	var rul := UI.button("Regole", 130, 60, 21)
 	rul.pressed.connect(func():
 		_store()
 		main.show_rules())
 	btns.add_child(rul)
-	var edi := UI.button("Editor delle mappe", 290, 62, 22)
+	var edi := UI.button("Editor delle mappe", 240, 60, 19)
 	edi.pressed.connect(func():
 		_store()
 		main.show_editor())
 	btns.add_child(edi)
-	btns.add_child(Audio.toggle_button("music", 160, 62))
-	btns.add_child(Audio.toggle_button("sfx", 160, 62))
+	btns.add_child(Audio.toggle_button("music", 125, 60))
+	btns.add_child(Audio.toggle_button("sfx", 125, 60))
 	var ses: Dictionary = main.get_net().load_session()
 	if str(ses.get("room", "")) != "":
 		_online_panel()
+
+
+func _row(label: String, opts_list: Array, cur: int, cb: Callable) -> HBoxContainer:
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 8)
+	var l := UI.label(label, 20, UI.INK, UI.font_bold)
+	l.custom_minimum_size.x = 190
+	hb.add_child(l)
+	for i in opts_list.size():
+		var b := UI.button(opts_list[i], 110, 40, 14)
+		if i == cur:
+			UI.primary(b)
+		var ii := i
+		b.pressed.connect(func(): cb.call(ii))
+		hb.add_child(b)
+	return hb
 
 
 func _refresh_rows() -> void:
@@ -233,11 +243,12 @@ func _refresh_rows() -> void:
 func _refresh_scen() -> void:
 	for c in scen_box.get_children():
 		c.queue_free()
-	scen_box.add_child(UI.title("La mappa", 30, UI.INK))
 	var s: Dictionary = scens[scen_i]
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 8)
-	var prev := UI.button("‹", 50, 42, 26)
+	var tl := UI.title("La mappa:", 28, UI.INK)
+	hb.add_child(tl)
+	var prev := UI.button("‹", 46, 40, 26)
 	prev.pressed.connect(func():
 		scen_i = (scen_i + scens.size() - 1) % scens.size()
 		_refresh_scen())
@@ -246,20 +257,27 @@ func _refresh_scen() -> void:
 	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hb.add_child(nm)
-	var nxt := UI.button("›", 50, 42, 26)
+	var nxt := UI.button("›", 46, 40, 26)
 	nxt.pressed.connect(func():
 		scen_i = (scen_i + 1) % scens.size()
 		_refresh_scen())
 	hb.add_child(nxt)
 	scen_box.add_child(hb)
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 16)
+	scen_box.add_child(body)
 	var mini := MapPreview.new()
 	mini.scen = s
-	mini.custom_minimum_size = Vector2(500, 300)
-	scen_box.add_child(mini)
-	scen_box.add_child(UI.wrap(s.get("desc", ""), 19, UI.INK2, 500))
+	mini.custom_minimum_size = Vector2(300, 310)
+	body.add_child(mini)
+	var tx := VBoxContainer.new()
+	tx.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tx.add_theme_constant_override("separation", 8)
+	body.add_child(tx)
+	tx.add_child(UI.wrap(s.get("desc", ""), 19, UI.INK2, 500))
 	var errs := SKData.validate_scenario(s)
 	if not errs.is_empty():
-		scen_box.add_child(UI.wrap("Questa mappa ha dei problemi: " + " ".join(errs), 17, UI.RED, 500))
+		tx.add_child(UI.wrap("Questa mappa ha dei problemi: " + " ".join(errs), 17, UI.RED, 500))
 	if s.get("custom", false):
 		var hb2 := HBoxContainer.new()
 		hb2.add_theme_constant_override("separation", 8)
@@ -275,7 +293,7 @@ func _refresh_scen() -> void:
 			scen_i = 0
 			_refresh_scen())
 		hb2.add_child(dl)
-		scen_box.add_child(hb2)
+		tx.add_child(hb2)
 
 
 func _store() -> void:

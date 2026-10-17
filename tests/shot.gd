@@ -106,13 +106,15 @@ func _run() -> void:
 	await shot("scegli_destinazione")
 	var d: int = g._dests()[0]
 	g._on_region(d)
+	print("passo ", g.step, " bersagli ", g._king_targets() if c == "re" else [])
 	await wait(10)
 	await shot("mossa_" + c)
-	g._on_hover(d, 0)
+	g._on_info(d, 0)
 	await wait(5)
 	await shot("info_regno")
 	g.board.zoom(0.45)
-	g.board.target = g.board.region_center[d]
+	var zt: Array = g._king_targets() if c == "re" else []
+	g.board.target = g.board.region_center[int(zt[0][0]) if not zt.is_empty() else d]
 	g.board._update_cam()
 	g.tip.visible = false
 	await wait(10)

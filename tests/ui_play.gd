@@ -73,19 +73,27 @@ func _turn(view) -> void:
 	var me: int = view._me()
 	var chars: Array = st.available_chars()
 	var c: String = _pick(chars)
-	if st.favor[me] and rng.randf() < 0.4:
-		view.sel = {"pw": true}
-	view._pick_char(c)
+	view._pick_char(c, st.favor[me] and rng.randf() < 0.4)
 	var steps := 0
-	while view.step != "confirm" and steps < 12:
+	var spy_skip := false
+	while view.step != "confirm" and steps < 16:
 		steps += 1
 		match view.step:
 			"dest":
 				view._on_region(_pick(view._dests()))
-			"king_adj":
-				view._on_region(_pick(st.king_normal_slots(view._dest())["adj"]))
-			"king_pw":
-				view._on_region(_pick(view._king_pw_cand()))
+			"king", "king_pw":
+				var tg: Array = view._king_targets()
+				if tg.is_empty():
+					break
+				if rng.randf() < 0.2:
+					view._on_house(rng.randi_range(0, st.n - 1))
+				var x0: Array = _pick(tg)
+				var before: int = view.sel.get("pl", []).size()
+				view._on_site(x0[0], x0[1])
+				if view.sel.get("pl", []).size() == before:
+					# colore senza villaggi in riserva: si torna al proprio
+					view._on_house(me)
+					view._on_site(x0[0], x0[1])
 			"pope_t":
 				view._on_region(_pick(st.pope_targets(view._dest(), view.sel["pw"])))
 			"pope_b":
@@ -96,19 +104,12 @@ func _turn(view) -> void:
 					if q != me and st.total_res(q) > 0:
 						qs.append(q)
 				var q: int = _pick(qs)
-				view.sel["from"] = q
-				view.sel["res"] = []
-				var need := mini(2 if view.sel["pw"] else 1, st.total_res(q))
-				var tmp: Dictionary = st.res[q].duplicate()
-				for k in need:
-					var kinds := []
-					for t in tmp:
-						if tmp[t] > 0:
-							kinds.append(t)
-					var t2: String = _pick(kinds)
-					tmp[t2] -= 1
-					view.sel["res"].append(t2)
-				view.step = "confirm"
+				var kinds := []
+				for t in st.res[q]:
+					var left: int = st.res[q][t] - (view.sel["res"].count(t) if view.sel["from"] == q else 0)
+					if left > 0:
+						kinds.append(t)
+				view._on_house_res(q, _pick(kinds))
 			"spy_a":
 				var sa: Array = st.spy_sites(view._dest(), view.sel["pw"])
 				var ok := false
@@ -116,9 +117,9 @@ func _turn(view) -> void:
 					if not st.spy_sites(b, view.sel["pw"]).is_empty():
 						ok = true
 				if sa.is_empty() or not ok or rng.randf() < 0.15:
-					view.step = "confirm"
-				else:
-					view._on_site(view._dest(), _pick(sa))
+					spy_skip = true
+					break
+				view._on_site(view._dest(), _pick(sa))
 			"spy_b":
 				var cand := []
 				for b in st.land[view._dest()]:
@@ -128,21 +129,14 @@ func _turn(view) -> void:
 				view._on_site(x[0], x[1])
 			_:
 				break
-	# a volte si cambiano i colori dei villaggi del Re
-	if c == "re" and view.sel.has("pl") and rng.randf() < 0.5:
-		for x in view.sel["pl"]:
-			x[1] = rng.randi_range(0, st.n - 1)
+	if spy_skip:
+		view.sel.erase("a")
+		view.sel.erase("b")
 	var m: Dictionary = view._move()
 	var err := st.check_move(me, m)
 	moves[c] = moves.get(c, 0) + 1
 	if err != "":
-		# colori del Re non validi sono un errore dell'utente, non dell'interfaccia: si rimette quello di base
-		if c == "re":
-			view._king_default() if not view.sel["pw"] else null
-			m = view._move()
-			err = st.check_move(me, m)
-		if err != "":
-			bad += 1
-			print("RIFIUTATA: ", err, " ", m, " passo ", view.step)
+		bad += 1
+		print("RIFIUTATA: ", err, " ", m, " passo ", view.step)
 	view._provide(m)
 	await wait(1)

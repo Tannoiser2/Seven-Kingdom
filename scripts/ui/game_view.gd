@@ -38,6 +38,8 @@ var btn_next: Button
 var btn_auto: Button
 var auto_next := false
 var pause_regs: Array = []
+var house_boxes := {}
+var res_nodes := {}
 signal next_pressed
 var game_done := false
 
@@ -73,6 +75,7 @@ func _ready() -> void:
 	board.region_clicked.connect(_on_region)
 	board.site_clicked.connect(_on_site)
 	board.hovered.connect(_on_hover)
+	board.info_requested.connect(_on_info)
 	_build_top()
 	_build_left()
 	_build_right()
@@ -416,13 +419,29 @@ func _refresh_left() -> void:
 	for c in left_box.get_children():
 		c.queue_free()
 	left_box.add_child(UI.title("I casati", 22))
+	house_boxes = {}
+	res_nodes = {}
+	var picking_col: bool = step in ["king", "king_pw"]
+	var picking_res: bool = step == "merch"
 	var order := []
 	for k in st.n:
 		order.append((st.first + k) % st.n)
 	for p in order:
 		var pc := PanelContainer.new()
 		var border := UI.pcol(p).lightened(0.2) if p != engine.cur else UI.GOLD
-		pc.add_theme_stylebox_override("panel", UI.flat(UI.pcol(p).darkened(0.62), border, 3 if p == engine.cur else 2, 8, 8))
+		var bw := 3 if p == engine.cur else 2
+		if picking_col and int(sel.get("color", -1)) == p:
+			border = Color("#fff3b0")
+			bw = 5
+		pc.add_theme_stylebox_override("panel", UI.flat(UI.pcol(p).darkened(0.62), border, bw, 8, 8))
+		house_boxes[p] = pc
+		var hp: int = p
+		pc.gui_input.connect(func(ev):
+			if _is_click(ev):
+				_on_house(hp))
+		if picking_col and st.reserve[p] > 0:
+			pc.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+			pc.tooltip_text = "Tocca per mettere villaggi di questo colore"
 		var vb := VBoxContainer.new()
 		vb.add_theme_constant_override("separation", 4)
 		pc.add_child(vb)
@@ -469,9 +488,38 @@ func _refresh_left() -> void:
 		vb.add_child(info)
 		var rs := HBoxContainer.new()
 		rs.add_theme_constant_override("separation", 6)
+		res_nodes[p] = {}
 		for t in SKData.RESOURCES:
-			rs.add_child(UI.res_chip(t, st.res[p][t], 24))
+			var n_have: int = st.res[p][t]
+			var mine_pick := 0
+			if picking_res and int(sel.get("from", -1)) == p:
+				mine_pick = sel["res"].count(t)
+			var chip := UI.res_chip(t, n_have - mine_pick, 24)
+			var holder := PanelContainer.new()
+			var can: bool = picking_res and p != _me() and n_have - mine_pick > 0
+			holder.add_theme_stylebox_override("panel", UI.flat(Color(1, 0.85, 0.3, 0.22) if can else Color(0, 0, 0, 0), Color("#ffd86a") if can else Color(0, 0, 0, 0), 2 if can else 0, 6, 1))
+			holder.add_child(chip)
+			chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			for ch in chip.get_children():
+				if ch is Control:
+					ch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			if can:
+				holder.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+				holder.tooltip_text = "Il Mercante prende 1 " + SKData.RES_NAME[t]
+			var tt: String = t
+			holder.gui_input.connect(func(ev):
+				if _is_click(ev):
+					_on_house_res(hp, tt)
+					holder.accept_event())
+			res_nodes[p][t] = holder
+			rs.add_child(holder)
 		vb.add_child(rs)
+		if picking_res and int(sel.get("from", -1)) == p and not sel["res"].is_empty():
+			var tk := HBoxContainer.new()
+			tk.add_child(UI.label("Rubate:", 14, UI.GOLD, UI.font_italic))
+			for t2 in sel["res"]:
+				tk.add_child(UI.res_chip(t2, 1, 20))
+			vb.add_child(tk)
 		if _can_see_objective(p) and st.objectives[p] != "":
 			var ob := UI.button("Obiettivo: " + SKData.obj_name(st.objectives[p]), 260, 32, 12)
 			ob.clip_text = true
@@ -480,7 +528,7 @@ func _refresh_left() -> void:
 			ob.pressed.connect(func(): _show_objective(pp))
 			vb.add_child(ob)
 		left_box.add_child(pc)
-	var leg := UI.wrap("Punti stimati senza obiettivi segreti. Passa il mouse su un regno per i dettagli.", 15, UI.PARCH.darkened(0.25), 260, UI.font_italic)
+	var leg := UI.wrap("Punti stimati senza obiettivi segreti. Tasto destro su un regno per i dettagli.", 15, UI.PARCH.darkened(0.25), 260, UI.font_italic)
 	left_box.add_child(leg)
 
 
@@ -517,61 +565,92 @@ func _refresh_cards() -> void:
 	for c in SKData.CHARS:
 		var used: bool = st.used.has(c)
 		var chosen: bool = sel.get("c", "") == c
-		var b := PanelContainer.new()
-		b.mouse_filter = Control.MOUSE_FILTER_STOP
-		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		var bg_col := Color(0.1, 0.14, 0.24) if not used else Color(0.07, 0.07, 0.09)
 		var lit: bool = my_turn and not used
-		var border := UI.GOLD if chosen else (Color("#e9c766") if lit else Color(0.35, 0.33, 0.3))
-		b.add_theme_stylebox_override("panel", UI.flat(bg_col, border, 3 if chosen else (2 if lit else 1), 8, 4))
-		var hb := HBoxContainer.new()
-		hb.add_theme_constant_override("separation", 8)
-		hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		b.add_child(hb)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		# ritratto con nome e regno
+		var pc := PanelContainer.new()
+		pc.custom_minimum_size = Vector2(92, 84)
+		pc.add_theme_stylebox_override("panel", UI.flat(Color(0.08, 0.1, 0.16), UI.GOLD if chosen else (Color("#e9c766") if lit else Color(0.3, 0.3, 0.3)), 3 if chosen else (2 if lit else 1), 6, 2))
+		pc.mouse_filter = Control.MOUSE_FILTER_STOP
+		pc.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		var art := TextureRect.new()
 		art.texture = UI.tex("res://assets/chars/%s_art.webp" % c)
 		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		art.custom_minimum_size = Vector2(78, 64)
 		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if used:
-			art.modulate = Color(0.4, 0.4, 0.4)
-		hb.add_child(art)
-		var vb := VBoxContainer.new()
-		vb.add_theme_constant_override("separation", 0)
-		vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		hb.add_child(vb)
-		var top := HBoxContainer.new()
-		top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var nm := UI.label(SKData.CHAR_SHORT[c], 16, UI.GOLD if not used else Color(0.55, 0.55, 0.55), UI.font_title)
+			art.modulate = Color(0.35, 0.35, 0.35)
+		pc.add_child(art)
+		var cap := VBoxContainer.new()
+		cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cap.alignment = BoxContainer.ALIGNMENT_END
+		pc.add_child(cap)
+		var nm := UI.label(SKData.CHAR_SHORT[c], 14, UI.GOLD if not used else Color(0.6, 0.6, 0.6), UI.font_title)
+		nm.add_theme_color_override("font_outline_color", Color.BLACK)
+		nm.add_theme_constant_override("outline_size", 5)
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		top.add_child(nm)
-		var where := UI.label("  in " + SKData.TILES[st.regions[st.chars[c]]["tile"]]["short"], 14, UI.PARCH.darkened(0.2) if not used else Color(0.5, 0.5, 0.5), UI.font_italic)
-		where.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		where.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		top.add_child(where)
+		cap.add_child(nm)
+		var wh := UI.label(SKData.TILES[st.regions[st.chars[c]]["tile"]]["short"], 12, UI.LIGHT, UI.font_italic)
+		wh.add_theme_color_override("font_outline_color", Color.BLACK)
+		wh.add_theme_constant_override("outline_size", 4)
+		wh.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		wh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cap.add_child(wh)
 		if used:
-			var who := UI.label("usato da " + engine.pname(st.used[c]), 14, UI.plight(st.used[c]), UI.font_bold)
-			who.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			top.add_child(who)
-			top.add_child(UI.icon("res://assets/tokens/azione_%s.webp" % UI.cid(st.used[c]), 20))
-		vb.add_child(top)
-		var ln := UI.wrap("Normale: " + SKData.CHAR_BRIEF[c][0], 13, UI.LIGHT if not used else Color(0.5, 0.5, 0.5), RW - 140)
-		ln.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		vb.add_child(ln)
-		var pcol := UI.GOLD if (fav and not used) else Color(0.55, 0.53, 0.5)
-		var lp := UI.wrap("Potenziata: " + SKData.CHAR_BRIEF[c][1] + ("" if fav or used else " (serve il Favore)"), 13, pcol, RW - 140, UI.font_italic)
-		lp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		vb.add_child(lp)
-		b.tooltip_text = "%s\n\nNORMALE: %s\n\nPOTENZIATA (scarta il Favore Papale): %s\n\nPASSIVA: %s" % [SKData.CHAR_NAME[c],
-			SKData.CHAR_TEXT[c]["normale"], SKData.CHAR_TEXT[c]["potenziata"], SKData.CHAR_TEXT[c]["passiva"]]
+			var mk := UI.icon("res://assets/tokens/azione_%s.webp" % UI.cid(st.used[c]), 40)
+			mk.set_anchors_preset(Control.PRESET_CENTER)
+			pc.add_child(mk)
 		var cc: String = c
-		b.gui_input.connect(func(ev):
-			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-				Audio.play("click", -6.0)
-				_pick_char(cc))
-		cards_box.add_child(b)
+		pc.gui_input.connect(func(ev): if _is_click(ev): _pick_char(cc, false))
+		row.add_child(pc)
+		# i tre riquadri delle azioni
+		var pw_ok: bool = fav and not used
+		var boxes := [["Normale", SKData.CHAR_BRIEF[c][0], lit, false],
+			["Potenziata", SKData.CHAR_BRIEF[c][1], lit and pw_ok, true],
+			["Passiva", SKData.CHAR_PASSIVE[c], false, false]]
+		for bx in boxes:
+			var on: bool = bx[2]
+			var is_sel: bool = chosen and bx[0] != "Passiva" and sel.get("pw", false) == bx[3]
+			var bp := PanelContainer.new()
+			bp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			bp.custom_minimum_size = Vector2(0, 84)
+			var bgc := Color(0.12, 0.17, 0.29) if on else Color(0.08, 0.09, 0.12)
+			if bx[0] == "Passiva":
+				bgc = Color(0.1, 0.12, 0.16)
+			if bx[3] and pw_ok:
+				bgc = Color(0.25, 0.19, 0.08) if on else Color(0.14, 0.11, 0.06)
+			var brd := UI.GOLD if is_sel else (Color("#e9c766") if on else Color(0.28, 0.28, 0.3))
+			bp.add_theme_stylebox_override("panel", UI.flat(bgc, brd, 3 if is_sel else 1, 6, 5))
+			var vb := VBoxContainer.new()
+			vb.add_theme_constant_override("separation", 1)
+			vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			bp.add_child(vb)
+			var tcol := UI.GOLD if bx[0] != "Passiva" else Color("#a9c4ff")
+			if used or (bx[3] and not pw_ok):
+				tcol = Color(0.5, 0.5, 0.5)
+			var tl := UI.label(bx[0] + (" ✦" if bx[3] else ""), 12, tcol, UI.font_title)
+			tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			vb.add_child(tl)
+			var tx := UI.wrap(bx[1], 12, UI.LIGHT if not (used or (bx[3] and not pw_ok)) else Color(0.5, 0.5, 0.5), 108)
+			tx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			vb.add_child(tx)
+			if bx[0] != "Passiva":
+				bp.mouse_filter = Control.MOUSE_FILTER_STOP
+				if on:
+					bp.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+				var pwv: bool = bx[3]
+				bp.gui_input.connect(func(ev): if _is_click(ev): _pick_char(cc, pwv))
+			row.add_child(bp)
+		cards_box.add_child(row)
+
+
+func _is_click(ev: InputEvent) -> bool:
+	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+		Audio.play("click", -6.0)
+		return true
+	return false
 
 
 var _ev_seen := 0
@@ -583,7 +662,16 @@ func _play_events() -> void:
 	if st.events.size() == _ev_seen:
 		return
 	var sounds := {}
+	var flights := []
+	var anim: bool = not (online != null and online.catchup) and _ev_seen > 0
 	for e in st.events.slice(_ev_seen):
+		if anim and e["k"] == "res":
+			flights.append({"t": e["t"], "from_site": [int(e["r"]), int(e["i"])], "to": int(e["p"])})
+		elif anim and e["k"] == "steal":
+			var k := 0
+			for t in e["res"]:
+				flights.append({"t": t, "from_house": [int(e["from"]), t], "to": int(e["to"]), "delay": 0.15 * k})
+				k += 1
 		match e["k"]:
 			"place", "inv": sounds["pawn"] = true
 			"res": sounds["coin"] = true
@@ -598,6 +686,76 @@ func _play_events() -> void:
 	_ev_seen = st.events.size()
 	for s in sounds:
 		Audio.play(s, -4.0)
+	if not flights.is_empty():
+		_fly_resources(flights)
+
+
+## Le risorse «saltano» dal sito della mappa (o dal riquadro del derubato) al riquadro del casato.
+func _fly_resources(flights: Array) -> void:
+	# le posizioni dei riquadri si conoscono solo dopo che la colonna di sinistra è stata ridisegnata
+	var src := {}
+	for fi in flights.size():
+		var f: Dictionary = flights[fi]
+		if f.has("from_house"):
+			var hp: int = f["from_house"][0]
+			if res_nodes.has(hp) and is_instance_valid(res_nodes[hp].get(f["t"])):
+				var n: Control = res_nodes[hp][f["t"]]
+				src[fi] = n.get_global_rect().get_center()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var k := 0
+	for fi in flights.size():
+		var f: Dictionary = flights[fi]
+		var a := Vector2.ZERO
+		if f.has("from_site"):
+			var wp: Vector3 = board.site_pos(f["from_site"][0], f["from_site"][1])
+			if board.cam.is_position_behind(wp):
+				continue
+			a = board.cam.unproject_position(wp)
+		elif src.has(fi):
+			a = src[fi]
+		else:
+			continue
+		var to: int = f["to"]
+		var b := Vector2.ZERO
+		if res_nodes.has(to) and is_instance_valid(res_nodes[to].get(f["t"])):
+			b = (res_nodes[to][f["t"]] as Control).get_global_rect().get_center()
+		elif house_boxes.has(to) and is_instance_valid(house_boxes[to]):
+			b = (house_boxes[to] as Control).get_global_rect().get_center()
+		else:
+			continue
+		var ic := TextureRect.new()
+		ic.texture = UI.tex("res://assets/res/%s.webp" % f["t"])
+		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		ic.size = Vector2(40, 40)
+		ic.pivot_offset = Vector2(20, 20)
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ic.position = a - ic.size / 2.0
+		ic.modulate.a = 0.0
+		add_child(ic)
+		var delay: float = float(f.get("delay", 0.0)) + 0.06 * k
+		k += 1
+		var tw := create_tween()
+		tw.tween_interval(delay)
+		tw.tween_property(ic, "modulate:a", 1.0, 0.1)
+		var mid := (a + b) / 2.0 + Vector2(0, -minf(160.0, a.distance_to(b) * 0.35))
+		var aa := a
+		var bb := b
+		tw.tween_method(func(t: float):
+			var q := aa.lerp(mid, t).lerp(mid.lerp(bb, t), t)
+			ic.position = q - ic.size / 2.0
+			ic.scale = Vector2.ONE * (1.0 + 0.5 * sin(t * PI)), 0.0, 1.0, 0.75).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_property(ic, "scale", Vector2(1.4, 1.4), 0.08)
+		tw.tween_property(ic, "modulate:a", 0.0, 0.18)
+		tw.tween_callback(ic.queue_free)
+		if house_boxes.has(to) and is_instance_valid(house_boxes[to]):
+			var hb: Control = house_boxes[to]
+			hb.pivot_offset = hb.size / 2.0
+			var tw2 := hb.create_tween()
+			tw2.tween_interval(delay + 0.85)
+			tw2.tween_property(hb, "scale", Vector2(1.04, 1.04), 0.08)
+			tw2.tween_property(hb, "scale", Vector2.ONE, 0.15)
 
 
 func _on_log(t: String) -> void:
@@ -640,7 +798,12 @@ func toast(t: String, secs := 2.2) -> void:
 
 # ------------------------------------------------------------------ informazioni sui regni
 
-func _on_hover(r: int, i: int) -> void:
+func _on_hover(_r: int, _i: int) -> void:
+	tip.visible = false
+
+
+## Clic destro su un regno: la sua scheda (resta finché si muove il mouse fuori).
+func _on_info(r: int, i: int) -> void:
 	if r < 0:
 		tip.visible = false
 		return
@@ -764,6 +927,7 @@ func _provide(v) -> void:
 	pending = {}
 	sel = {}
 	step = ""
+	board.preview = null
 	for c in modal.get_children():
 		c.queue_free()
 	modal.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -839,7 +1003,6 @@ func _objective_modal(req: Dictionary) -> void:
 		var ii = i
 		b.pressed.connect(func(): _provide(ii))
 		col.add_child(b)
-		col.add_child(UI.wrap(SKData.obj_text(id), 17, UI.INK2, 300))
 		hb.add_child(col)
 
 
@@ -859,12 +1022,16 @@ func _show_objective(p: int) -> void:
 
 
 # ------------------------------------------------------------------ costruzione della mossa
+## La mossa si costruisce direttamente sulla mappa: si sceglie il personaggio (normale o potenziata),
+## lo si porta in un regno seguendo le frecce (si muove subito), poi si toccano i siti illuminati.
+## Il colore dei villaggi del Re si cambia toccando il riquadro del casato a sinistra; le risorse da
+## rubare col Mercante si toccano nel riquadro dell'avversario.
 
 func _me() -> int:
 	return int(pending.get("seat", -1))
 
 
-func _pick_char(c: String) -> void:
+func _pick_char(c: String, pw := false) -> void:
 	if pending.get("type", "") != "turn":
 		_show_card(c)
 		return
@@ -872,9 +1039,11 @@ func _pick_char(c: String) -> void:
 	if st.used.has(c):
 		_show_card(c)
 		return
-	var pw: bool = sel.get("pw", false) and st.favor[_me()]
+	if pw and not st.favor[_me()]:
+		return
 	sel = {"c": c, "pw": pw}
 	step = "dest"
+	_update_preview()
 	refresh()
 	_build_prompt()
 
@@ -908,6 +1077,41 @@ func _path_to(d: int) -> Array:
 	return best
 
 
+func _dest() -> int:
+	var p: Array = sel.get("path", [])
+	return p[p.size() - 1] if not p.is_empty() else -1
+
+
+## Anteprima: lo stato con la mossa fin qui applicata (il personaggio già spostato, i villaggi già messi).
+func _preview_state() -> SKState:
+	var st: SKState = engine.st
+	if not sel.has("path"):
+		return null
+	var ps := st.clone()
+	var m := _move()
+	if m["c"] == "spia" and not m.has("a"):
+		ps.chars["spia"] = _dest()
+		return ps
+	if m["c"] == "mercante":
+		m["from"] = -1
+		m["res"] = []
+	if m["c"] in ["fanteria", "cavalleria"]:
+		ps.chars[m["c"]] = _dest()
+		return ps
+	var pw: bool = m["pw"]
+	if pw and not ps.favor[_me()]:
+		m["pw"] = false
+	ps.apply_move(_me(), m)
+	ps.used.erase(m["c"])
+	if pw:
+		ps.favor[_me()] = true
+	return ps
+
+
+func _update_preview() -> void:
+	board.preview = _preview_state() if not pending.is_empty() else null
+
+
 func _on_region(r: int) -> void:
 	var st: SKState = engine.st
 	if pending.is_empty():
@@ -916,20 +1120,18 @@ func _on_region(r: int) -> void:
 		"setup":
 			if st.setup_regions().has(r):
 				_provide(r)
+				return
 		"dest":
 			if _dests().has(r):
 				sel["path"] = _path_to(r)
 				_after_dest()
-		"king_adj":
-			var sl := st.king_normal_slots(_dest())
-			if sl["adj"].has(r):
-				sel["adj"] = r
-				_king_default()
-		"king_pw":
-			if _king_pw_cand().has(r) and sel["pl"].size() < 2:
-				sel["pl"].append([r, _me()])
-				if sel["pl"].size() >= 2:
-					step = "confirm"
+		"king", "king_pw":
+			# toccare il regno equivale a toccare il suo sito illuminato
+			for x in _king_targets():
+				if int(x[0]) == r:
+					_on_site(r, int(x[1]))
+					return
+			return
 		"pope_t":
 			if st.pope_targets(_dest(), sel["pw"]).has(r):
 				sel["r"] = r
@@ -940,29 +1142,197 @@ func _on_region(r: int) -> void:
 				step = "confirm"
 		_:
 			return
+	_update_preview()
 	refresh()
 	_build_prompt()
 
 
 func _on_site(r: int, i: int) -> void:
 	var st: SKState = engine.st
-	if step == "spy_a":
-		if r == _dest() and st.spy_sites(r, sel["pw"]).has(i):
-			sel["a"] = [r, i]
-			step = "spy_b"
-			refresh()
-			_build_prompt()
-	elif step == "spy_b":
-		if st.land[_dest()].has(r) and st.spy_sites(r, sel["pw"]).has(i):
-			sel["b"] = [r, i]
-			step = "confirm"
-			refresh()
-			_build_prompt()
+	match step:
+		"king", "king_pw":
+			var col: int = sel.get("color", _me())
+			# toccare un villaggio appena messo lo toglie
+			var pl: Array = sel.get("pl", [])
+			var ghost := _ghost_index(r, i)
+			if ghost >= 0:
+				pl.remove_at(ghost)
+				sel["pl"] = pl
+			else:
+				var ok := false
+				for x in _king_targets():
+					if int(x[0]) == r and int(x[1]) == i:
+						ok = true
+				if not ok:
+					return
+				if step == "king":
+					# regole del Re normale: uno solo → tuo; due o più → almeno uno di un altro casato
+					var want := _king_want()
+					var other := pl.any(func(y): return int(y[1]) != _me())
+					if want == 1:
+						col = _me()
+					elif pl.size() == want - 1 and not other and col == _me():
+						_king_auto_color()
+						col = sel.get("color", col)
+				if st.reserve[col] - pl.filter(func(y): return int(y[1]) == col).size() <= 0:
+					return
+				pl.append([r, col])
+				sel["pl"] = pl
+			_king_auto_color()
+		"spy_a":
+			if r == _dest() and st.spy_sites(r, sel["pw"]).has(i):
+				sel["a"] = [r, i]
+				step = "spy_b"
+			else:
+				return
+		"spy_b":
+			if r == _dest() and st.spy_sites(r, sel["pw"]).has(i):
+				sel["a"] = [r, i]
+			elif st.land[_dest()].has(r) and st.spy_sites(r, sel["pw"]).has(i):
+				sel["b"] = [r, i]
+				step = "confirm"
+			else:
+				return
+		_:
+			_on_region(r)
+			return
+	_update_preview()
+	refresh()
+	_build_prompt()
 
 
-func _dest() -> int:
-	var p: Array = sel.get("path", [])
-	return p[p.size() - 1] if not p.is_empty() else -1
+## Il villaggio del Re già messo (anteprima) che si trova sul sito (r, i), oppure -1.
+func _ghost_index(r: int, i: int) -> int:
+	var st: SKState = engine.st
+	var pl: Array = sel.get("pl", [])
+	if sel.get("pw", false):
+		var done := {}
+		for k in pl.size():
+			var rr := int(pl[k][0])
+			var at := mini(1 + int(done.get(rr, 0)), st.regions[rr]["sites"].size() - 1)
+			done[rr] = int(done.get(rr, 0)) + 1
+			if rr == r and at == i:
+				return k
+		return -1
+	var used := {}
+	for k in pl.size():
+		var rr := int(pl[k][0])
+		var free_sites := []
+		for j in st.regions[rr]["sites"].size():
+			if st.regions[rr]["sites"][j] == -1:
+				free_sites.append(j)
+		var n := int(used.get(rr, 0))
+		used[rr] = n + 1
+		if rr == r and n < free_sites.size() and free_sites[n] == i:
+			return k
+	return -1
+
+
+## Siti dove il Re può mettere il prossimo villaggio: [[regno, sito]].
+func _king_targets() -> Array:
+	var st: SKState = engine.st
+	var d := _dest()
+	var pl: Array = sel.get("pl", [])
+	var out := []
+	if sel.get("pw", false):
+		if pl.size() >= 2:
+			return []
+		var done := {}
+		var adj_used := -1
+		for x in pl:
+			done[int(x[0])] = int(done.get(int(x[0]), 0)) + 1
+			if int(x[0]) != d:
+				adj_used = int(x[0])
+		for r in [d] + st.land[d]:
+			if not st._king_region_ok(r, true):
+				continue
+			if r != d and adj_used != -1 and r != adj_used:
+				continue
+			out.append([r, mini(1 + int(done.get(r, 0)), st.regions[r]["sites"].size() - 1)])
+		return out
+	var sl := st.king_normal_slots(d)
+	var in_main := 0
+	var adj_r := -1
+	for x in pl:
+		if int(x[0]) == d:
+			in_main += 1
+		else:
+			adj_r = int(x[0])
+	var ps := board.preview if board.preview != null else st
+	if in_main < sl["main"]:
+		var lf := ps.lowest_free(d)
+		if lf >= 0:
+			out.append([d, lf])
+	if adj_r == -1:
+		for a in sl["adj"]:
+			var lf2 := ps.lowest_free(a)
+			if lf2 >= 0:
+				out.append([a, lf2])
+	return out
+
+
+## Prima si mettono i propri villaggi, poi (se serve) quello di un altro casato: il colore passa da
+## solo al primo avversario quando resta l'ultimo villaggio e non ce n'è ancora uno avversario.
+func _king_auto_color() -> void:
+	var st: SKState = engine.st
+	var me := _me()
+	var pl: Array = sel.get("pl", [])
+	if sel.get("pw", false):
+		if not sel.has("color"):
+			sel["color"] = me
+		return
+	var want := _king_want()
+	var other := pl.any(func(x): return int(x[1]) != me)
+	if want >= 2 and not other and pl.size() == want - 1:
+		for k in st.n:
+			var q := (me + 1 + k) % st.n
+			if q != me and st.reserve[q] > 0:
+				sel["color"] = q
+				return
+	elif other and int(sel.get("color", me)) != me:
+		# il villaggio dell'altro casato c'è già: si torna al proprio colore
+		sel["color"] = me
+
+
+func _king_want() -> int:
+	var st: SKState = engine.st
+	var sl := st.king_normal_slots(_dest())
+	var tot := 0
+	for o in st.n:
+		tot += st.reserve[o]
+	return mini(sl["main"] + (1 if not sl["adj"].is_empty() else 0), tot)
+
+
+## Tocco sul riquadro di un casato (a sinistra): sceglie il colore dei villaggi del Re.
+func _on_house(p: int) -> void:
+	if pending.get("type", "") != "turn":
+		return
+	if step in ["king", "king_pw"]:
+		sel["color"] = p
+		refresh()
+		_build_prompt()
+
+
+## Tocco su una risorsa nel riquadro di un casato: il Mercante la ruba.
+func _on_house_res(p: int, t: String) -> void:
+	if step != "merch" or p == _me():
+		_on_house(p)
+		return
+	var st: SKState = engine.st
+	var need := mini(2 if sel["pw"] else 1, st.total_res(p))
+	if sel["from"] != p:
+		sel["from"] = p
+		sel["res"] = []
+	var taken: int = sel["res"].count(t)
+	if st.res[p][t] - taken <= 0:
+		return
+	if sel["res"].size() >= need:
+		sel["res"] = []
+	sel["res"].append(t)
+	if sel["res"].size() >= need:
+		step = "confirm"
+	refresh()
+	_build_prompt()
 
 
 func _after_dest() -> void:
@@ -970,19 +1340,12 @@ func _after_dest() -> void:
 	var d := _dest()
 	match sel["c"]:
 		"re":
-			if sel["pw"]:
-				sel["pl"] = []
-				step = "king_pw" if not _king_pw_cand().is_empty() else "confirm"
-			else:
-				var sl := st.king_normal_slots(d)
-				sel.erase("adj")
-				if sl["adj"].size() == 1:
-					sel["adj"] = sl["adj"][0]
-				if sl["adj"].size() > 1:
-					step = "king_adj"
-					sel["pl"] = []
-				else:
-					_king_default()
+			sel["pl"] = []
+			sel["color"] = _me()
+			step = "king_pw" if sel["pw"] else "king"
+			_update_preview()
+			if _king_targets().is_empty():
+				step = "confirm"
 		"papa":
 			var t := st.pope_targets(d, sel["pw"])
 			sel["r"] = -1
@@ -1008,59 +1371,28 @@ func _after_dest() -> void:
 			step = "confirm"
 
 
-func _king_pw_cand() -> Array:
-	var out := []
-	var d := _dest()
-	var adj_used := -1
-	for x in sel.get("pl", []):
-		if int(x[0]) != d:
-			adj_used = int(x[0])
-	for r in [d] + engine.st.land[d]:
-		if engine.st._king_region_ok(r, true) and (adj_used == -1 or r == d or r == adj_used):
-			out.append(r)
-	return out
-
-
-## Il Re (azione normale): i villaggi vanno nel suo regno e in quello adiacente scelto; di base i
-## tuoi, con uno dell'avversario che segue nell'ordine (lo si può cambiare).
-func _king_default() -> void:
-	var st: SKState = engine.st
-	var me := _me()
-	var sl := st.king_normal_slots(_dest())
-	var pl := []
-	for i in sl["main"]:
-		pl.append([_dest(), me])
-	if sel.has("adj"):
-		pl.append([int(sel["adj"]), me])
-	if pl.size() >= 2:
-		var other := (me + 1) % st.n
-		for k in st.n:
-			var q := (me + 1 + k) % st.n
-			if q != me and st.reserve[q] > 0:
-				other = q
-				break
-		pl[pl.size() - 1][1] = other
-	sel["pl"] = pl
-	step = "confirm"
-
-
 func _apply_highlight() -> void:
 	var st: SKState = engine.st
 	var regs := []
 	var sts := []
+	var pts := []
+	var arr := []
 	match step:
 		"setup":
-			regs = st.setup_regions()
+			for r in st.setup_regions():
+				sts.append([r, st.lowest_free(r)])
 		"dest":
-			regs = _dests()
-		"king_adj":
-			regs = st.king_normal_slots(_dest())["adj"]
-		"king_pw":
-			regs = _king_pw_cand()
+			var from: int = st.chars[sel["c"]]
+			for d in _dests():
+				arr.append([from, d])
+		"king", "king_pw":
+			sts = _king_targets()
 		"pope_t":
-			regs = st.pope_targets(_dest(), sel.get("pw", false))
+			for r in st.pope_targets(_dest(), sel.get("pw", false)):
+				pts.append(board.wealth_pos(r, 5 - int(st.regions[r]["infl"])))
 		"pope_b":
-			regs = st.free_cathedrals()
+			for r in st.free_cathedrals():
+				pts.append(board.bishop_pos(r))
 		"spy_a":
 			for i in st.spy_sites(_dest(), sel["pw"]):
 				sts.append([_dest(), i])
@@ -1068,183 +1400,96 @@ func _apply_highlight() -> void:
 			for r in st.land[_dest()]:
 				for i in st.spy_sites(r, sel["pw"]):
 					sts.append([r, i])
+	# i regni con caselle illuminate hanno anche il bordo dorato, per trovarle a colpo d'occhio
+	for x in sts:
+		if step != "setup" and not regs.has(int(x[0])):
+			regs.append(int(x[0]))
 	if pending.is_empty():
 		regs = pause_regs.duplicate()
 		sts = []
-	board.set_highlight(regs, sts)
+		pts = []
+		arr = []
+	board.set_highlight(regs, sts, pts, arr)
 
 
 func _build_prompt() -> void:
 	for c in prompt_box.get_children():
 		c.queue_free()
 	var st: SKState = engine.st
+	var W := RW - 40
 	if pending.is_empty():
 		if engine.cur >= 0 and not game_done:
-			prompt_box.add_child(UI.wrap("Tocca a %s…" % engine.pname(engine.cur), 19, UI.PARCH, RW - 40, UI.font_italic))
+			prompt_box.add_child(UI.wrap("Tocca a %s…" % engine.pname(engine.cur), 19, UI.PARCH, W, UI.font_italic))
 		return
 	var me := _me()
 	var t: String = pending["type"]
 	if t == "setup":
 		prompt_box.add_child(UI.title("Piazzamento iniziale", 20))
-		prompt_box.add_child(UI.wrap("%s, scegli un regno per un tuo villaggio (giro %d di 3): va sul sito libero più basso, partendo dal Governatore, e prendi la risorsa che c'era." % [engine.pname(me), int(pending.get("round", 0)) + 1], 18, UI.LIGHT, RW - 40))
-		_region_buttons(st.setup_regions(), func(r): _provide(r))
+		prompt_box.add_child(UI.wrap("%s, tocca uno dei siti illuminati (giro %d di 3): ci metti un tuo villaggio e prendi la risorsa che c'era." % [engine.pname(me), int(pending.get("round", 0)) + 1], 18, UI.LIGHT, W))
 		return
 	if t != "turn":
 		return
 	prompt_box.add_child(UI.title("La tua mossa, %s" % engine.pname(me), 20))
-	if st.favor[me]:
-		var pwb := UI.button("Azione potenziata: " + ("SÌ" if sel.get("pw", false) else "no"), 300, 40, 14)
-		if sel.get("pw", false):
-			UI.gold(pwb)
-		pwb.tooltip_text = "Scarta il Favore Papale per fare l'azione potenziata del personaggio."
-		pwb.pressed.connect(func():
-			var c0: String = sel.get("c", "")
-			sel = {"pw": not sel.get("pw", false)}
-			if c0 != "":
-				sel["c"] = c0
-				step = "dest"
-			else:
-				step = "char"
-			refresh()
-			_build_prompt())
-		prompt_box.add_child(pwb)
 	if step == "char" or not sel.has("c"):
-		prompt_box.add_child(UI.wrap("Scegli un personaggio libero sulla plancia qui sopra (o tocca la sua carta per leggerne le azioni). Poi lo sposti e fai la sua azione.", 18, UI.LIGHT, RW - 40))
+		prompt_box.add_child(UI.wrap("Scegli un personaggio libero: tocca il riquadro «Normale» o, se hai il Favore Papale, «Potenziata».", 18, UI.LIGHT, W))
 		return
 	var c: String = sel["c"]
-	var mode := " (potenziata)" if sel.get("pw", false) else ""
-	prompt_box.add_child(UI.label(SKData.CHAR_NAME[c] + mode, 19, UI.GOLD, UI.font_title))
+	prompt_box.add_child(UI.label(SKData.CHAR_NAME[c] + (" — potenziata" if sel.get("pw", false) else ""), 19, UI.GOLD, UI.font_title))
+	var hint := ""
 	match step:
 		"dest":
-			prompt_box.add_child(UI.wrap("Dove lo sposti? (Il movimento è obbligatorio; i regni illuminati sono raggiungibili%s.)" % ("" if c == "cavalleria" else ", anche via porto"), 18, UI.LIGHT, RW - 40))
-			_region_buttons(_dests(), func(r): _on_region(r))
-		"king_adj":
-			prompt_box.add_child(UI.wrap("In quale regno adiacente metti il terzo villaggio?", 18, UI.LIGHT, RW - 40))
-			_region_buttons(st.king_normal_slots(_dest())["adj"], func(r): _on_region(r))
+			hint = "Seguendo una freccia, tocca il regno dove lo porti."
+		"king":
+			var col: int = sel.get("color", me)
+			hint = "Tocca i siti illuminati per mettere i villaggi. Ora metti un villaggio di [b][color=#%s]%s[/color][/b]: per cambiare casato tocca il suo riquadro a sinistra. Tocca un villaggio appena messo per toglierlo." % [UI.plight(col).to_html(false), engine.pname(col)]
 		"king_pw":
-			prompt_box.add_child(UI.wrap("Scegli i regni dei due villaggi (%d/2): il regno del Re o uno adiacente, anche lo stesso due volte." % sel["pl"].size(), 18, UI.LIGHT, RW - 40))
-			_region_buttons(_king_pw_cand(), func(r): _on_region(r))
+			var col2: int = sel.get("color", me)
+			hint = "Tocca i siti illuminati (2° posto, gli altri villaggi scalano). Colore: [b][color=#%s]%s[/color][/b] (tocca un riquadro a sinistra per cambiarlo)." % [UI.plight(col2).to_html(false), engine.pname(col2)]
 		"pope_t":
-			prompt_box.add_child(UI.wrap("Dove metti l'influenza religiosa?", 18, UI.LIGHT, RW - 40))
-			_region_buttons(st.pope_targets(_dest(), sel["pw"]), func(r): _on_region(r))
+			hint = "Tocca la casella illuminata della Ricchezza dove metti l'influenza religiosa."
 		"pope_b":
-			prompt_box.add_child(UI.wrap("In quale Cattedrale nomini il tuo Vescovo?", 18, UI.LIGHT, RW - 40))
-			_region_buttons(st.free_cathedrals(), func(r): _on_region(r))
+			hint = "Tocca il Luogo Sacro dove nomini il tuo Vescovo."
 		"merch":
-			_merchant_panel()
+			var need := 2 if sel["pw"] else 1
+			hint = "Tocca %s nel riquadro di un avversario, a sinistra." % ("una sua risorsa" if need == 1 else "due sue risorse")
 		"spy_a":
-			prompt_box.add_child(UI.wrap("Tocca un villaggio nel regno della Spia (%s)%s." % [st.rname(_dest()), "" if sel["pw"] else ", non il Governatore"], 18, UI.LIGHT, RW - 40))
-			var nb := UI.button("Nessuno scambio", 220, 38, 14)
-			nb.pressed.connect(func():
-				step = "confirm"
-				_build_prompt())
-			prompt_box.add_child(nb)
+			hint = "Tocca un villaggio nel regno della Spia%s." % ("" if sel["pw"] else " (non il Governatore)")
 		"spy_b":
-			prompt_box.add_child(UI.wrap("Ora tocca il villaggio con cui scambiarlo, in un regno adiacente (collegato da un ponte).", 18, UI.LIGHT, RW - 40))
-	if step == "confirm" or step == "king_pw" or step == "merch":
-		_placement_editor()
+			hint = "Ora tocca il villaggio con cui scambiarlo, in un regno collegato da un ponte."
+		"confirm":
+			if c in ["fanteria", "cavalleria"] and st.regions[_dest()]["war"]:
+				hint = "Il regno è in guerra: dichiari battaglia (si combatte nelle azioni passive)."
+	if hint != "":
+		var hl := UI.rich(17, UI.LIGHT)
+		hl.custom_minimum_size = Vector2(W, 0)
+		hl.append_text(hint)
+		prompt_box.add_child(hl)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	if sel.has("path"):
 		var err := st.check_move(me, _move())
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
-		var ok := UI.primary(UI.button("Conferma", 180, 48, 18))
+		var ok := UI.primary(UI.button("Conferma", 170, 46, 18))
 		ok.disabled = err != ""
 		ok.pressed.connect(func(): _provide(_move()))
 		row.add_child(ok)
-		if c in ["fanteria", "cavalleria"] and st.regions[_dest()]["war"]:
-			prompt_box.add_child(UI.wrap("Il regno è in guerra: dichiari battaglia (si combatte nelle azioni passive).", 17, UI.GOLD, RW - 40))
-		if err != "" and step == "confirm":
-			prompt_box.add_child(UI.wrap("Non ancora: " + err + ".", 16, Color("#ff9a8a"), RW - 40))
-		prompt_box.add_child(row)
-		prompt_box.add_child(UI.wrap(_summary(), 16, UI.PARCH, RW - 40, UI.font_italic))
-	var back := UI.button("Annulla", 140, 38, 14)
+		if step == "spy_a" or step == "spy_b":
+			var nb := UI.button("Nessuno scambio", 190, 46, 14)
+			nb.pressed.connect(func():
+				sel.erase("a")
+				sel.erase("b")
+				_provide(_move()))
+			row.add_child(nb)
+	var back := UI.button("Annulla", 120, 46, 14)
 	back.pressed.connect(func():
-		sel = {"pw": sel.get("pw", false)}
+		sel = {}
 		step = "char"
+		_update_preview()
 		refresh()
 		_build_prompt())
-	prompt_box.add_child(back)
-
-
-func _region_buttons(list: Array, cb: Callable) -> void:
-	var fl := HFlowContainer.new()
-	fl.add_theme_constant_override("h_separation", 6)
-	fl.add_theme_constant_override("v_separation", 6)
-	for r in list:
-		var b := UI.button(SKData.TILES[engine.st.regions[r]["tile"]]["short"], 126, 36, 13)
-		var rr: int = r
-		b.pressed.connect(func(): cb.call(rr))
-		b.mouse_entered.connect(func(): board.set_highlight([rr], []))
-		b.mouse_exited.connect(_apply_highlight)
-		fl.add_child(b)
-	prompt_box.add_child(fl)
-
-
-## Colori dei villaggi del Re (si possono cambiare).
-func _placement_editor() -> void:
-	if sel.get("c", "") != "re" or not sel.has("pl"):
-		return
-	var st: SKState = engine.st
-	for k in sel["pl"].size():
-		var x: Array = sel["pl"][k]
-		var hb := HBoxContainer.new()
-		hb.add_theme_constant_override("separation", 4)
-		var lb := UI.label("%s:" % SKData.TILES[st.regions[int(x[0])]["tile"]]["short"], 16, UI.LIGHT, UI.font_bold)
-		lb.custom_minimum_size = Vector2(100, 0)
-		hb.add_child(lb)
-		for q in st.n:
-			var b := UI.button("", 52, 34, 12)
-			UI.colored(b, UI.pcol(q))
-			if int(x[1]) == q:
-				b.add_theme_stylebox_override("normal", UI.flat(UI.pcol(q).lightened(0.15), Color.WHITE, 4, 6, 6))
-				b.text = "•"
-			b.tooltip_text = engine.pname(q) + " (riserva %d)" % st.reserve[q]
-			var kk = k
-			var qq: int = q
-			b.pressed.connect(func():
-				sel["pl"][kk][1] = qq
-				_build_prompt())
-			hb.add_child(b)
-		prompt_box.add_child(hb)
-
-
-func _merchant_panel() -> void:
-	var st: SKState = engine.st
-	var me := _me()
-	var need := 2 if sel["pw"] else 1
-	prompt_box.add_child(UI.wrap("Prendi %d risors%s dalla riserva di un avversario." % [need, "e" if need > 1 else "a"], 18, UI.LIGHT, RW - 40))
-	for q in st.n:
-		if q == me or st.total_res(q) <= 0:
-			continue
-		var hb := HBoxContainer.new()
-		hb.add_theme_constant_override("separation", 4)
-		var lb := UI.label(engine.pname(q), 16, UI.plight(q), UI.font_bold)
-		lb.custom_minimum_size = Vector2(110, 0)
-		lb.clip_text = true
-		hb.add_child(lb)
-		for t in SKData.RESOURCES:
-			var have: int = st.res[q][t]
-			var taken: int = sel["res"].count(t) if sel["from"] == q else 0
-			var b := Button.new()
-			b.custom_minimum_size = Vector2(52, 40)
-			b.icon = UI.tex("res://assets/res/%s.webp" % t)
-			b.expand_icon = true
-			b.text = "%d" % (have - taken)
-			b.disabled = have - taken <= 0
-			b.tooltip_text = "%s di %s" % [SKData.RES_NAME[t], engine.pname(q)]
-			if taken > 0:
-				UI.gold(b)
-			var qq: int = q
-			var tt: String = t
-			b.pressed.connect(func():
-				if sel["from"] != qq:
-					sel["from"] = qq
-					sel["res"] = []
-				if sel["res"].size() >= need:
-					sel["res"] = []
-				sel["res"].append(tt)
-				_build_prompt())
-			hb.add_child(b)
-		prompt_box.add_child(hb)
+	row.add_child(back)
+	prompt_box.add_child(row)
+	if sel.has("path"):
+		prompt_box.add_child(UI.wrap(_summary(), 15, UI.PARCH, W, UI.font_italic))
 
 
 func _move() -> Dictionary:
