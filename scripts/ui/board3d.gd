@@ -28,6 +28,7 @@ var root_tiles: Node3D
 var root_pieces: Node3D
 var root_hl: Node3D
 var root_fx: Node3D
+var sea_paths := {}   # "a-b" (regni) -> punti della rotta via mare, da a verso b
 var fx_state := {}
 var fx_nodes := {}
 var doves: Array = []
@@ -218,6 +219,21 @@ func build_map() -> void:
 		if port_pos.has(pr[0]) and port_pos.has(pr[1]):
 			var pts := SKData.sea_route(port_pos[pr[0]][0], port_pos[pr[0]][1], port_pos[pr[1]][0], port_pos[pr[1]][1], centers, PORT_D, 1.35 + 0.3 * k, Vector2(BOARD_W / 2.0 - 0.2, BOARD_H / 2.0 - 0.2), Vector2(0, BOARD_Z))
 			_route_pts(pts, SKData.ROUTE_COLORS[pr[0]])
+			# per far viaggiare i personaggi in barca lungo la rotta
+			var ra := -1
+			var rb := -1
+			for pt2 in st.scen["ports"]:
+				for r2 in st.regions.size():
+					if int(st.regions[r2]["pos"]) == int(pt2["pos"]):
+						if pt2["id"] == pr[0]:
+							ra = r2
+						elif pt2["id"] == pr[1]:
+							rb = r2
+			if ra >= 0 and rb >= 0:
+				var rev := pts.duplicate()
+				rev.reverse()
+				sea_paths["%d-%d" % [ra, rb]] = pts
+				sea_paths["%d-%d" % [rb, ra]] = rev
 			k += 1
 
 
@@ -790,7 +806,7 @@ func _portrait_token(c: String) -> Node3D:
 	var sh := Shader.new()
 	sh.code = PORTRAIT_SHADER
 	m.shader = sh
-	m.set_shader_parameter("tex", UI.tex("res://assets/chars/%s_art.webp" % c))
+	m.set_shader_parameter("tex", UI.tex(SKData.cart(c)))
 	m.set_shader_parameter("ring", SKData.CHAR_COLOR[c])
 	q.material_override = m
 	q.position.y = 0.0125
@@ -1035,7 +1051,7 @@ func _make(kind: String, v) -> Node3D:
 		"char":
 			var c: String = v
 			if pieces3d:
-				return _fit(_model(c), 0.42 if c != "cavalleria" else 0.44)
+				return _fit(_model(SKData.cmodel(c)), 0.42 if c != "cavalleria" else 0.44)
 			return _portrait_token(c)
 	return Node3D.new()
 
@@ -1151,43 +1167,144 @@ func _walk(n: Node3D, c: String, dest: int, pos: Vector3, st: SKState) -> void:
 		if e["k"] == "move" and e["c"] == c:
 			path = e["path"]
 			break
-	var pts: Array = [n.position]
-	var sea: Array = []
+	# il percorso: dal centro del regno al ponte, poi al regno successivo; via mare in barca lungo la rotta
+	var legs: Array = []   # [[punti], in_barca]
+	var cur: Vector3 = n.position
 	if path.size() >= 2 and int(path[path.size() - 1]) == dest:
 		for k in range(1, path.size()):
 			var a := int(path[k - 1])
 			var b := int(path[k])
-			var by_sea: bool = not st.land[a].has(b)
-			if k < path.size() - 1:
-				pts.append(region_center[b])
+			var end: Vector3 = pos if k == path.size() - 1 else region_center[b]
+			var y := base_y()
+			if st.land[a].has(b):
+				var ma: Vector2 = SKData.pos_center(int(st.regions[a]["pos"]))
+				var mb: Vector2 = SKData.pos_center(int(st.regions[b]["pos"]))
+				var mid := (ma + mb) / 2.0
+				var bridge := Vector3(mid.x, y + 0.03, mid.y)
+				var dirv := (mb - ma).normalized()
+				legs.append([[cur, bridge - Vector3(dirv.x, 0, dirv.y) * 0.14, bridge, bridge + Vector3(dirv.x, 0, dirv.y) * 0.14, end], false])
 			else:
-				pts.append(pos)
-			sea.append(by_sea)
+				var sp: Array = sea_paths.get("%d-%d" % [a, b], [])
+				if sp.is_empty():
+					legs.append([[cur, end], true])
+				else:
+					var p0: Vector2 = sp[0]
+					legs.append([[cur, Vector3(p0.x, y, p0.y)], false])
+					var water := []
+					for q in sp:
+						water.append(Vector3(q.x, 0.02, q.y))
+					legs.append([water, true])
+					var pl: Vector2 = sp[sp.size() - 1]
+					legs.append([[Vector3(pl.x, y, pl.y), end], false])
+			cur = end
 	else:
-		pts.append(pos)
-		sea.append(false)
+		legs.append([[cur, pos], false])
 	if n.has_meta("walk"):
 		var old: Tween = n.get_meta("walk")
 		if old != null and old.is_valid():
 			old.kill()
+		if n.has_meta("boat") and is_instance_valid(n.get_meta("boat")):
+			n.get_meta("boat").queue_free()
 	var tw := n.create_tween()
 	n.set_meta("walk", tw)
-	for k in range(1, pts.size()):
-		var a3: Vector3 = pts[k - 1]
-		var b3: Vector3 = pts[k]
-		var dist := a3.distance_to(b3)
-		var by_sea2: bool = sea[k - 1]
-		var dur := clampf(dist * 0.55, 0.35, 0.9) + (0.25 if by_sea2 else 0.0)
-		var steps := maxi(2, int(dist / 0.12))
+	var horse := c == "cavalleria"
+	var turn_body := pieces3d
+	var model: Node3D = n
+	var yaw0 := 0.0
+	for leg in legs:
+		var pts: Array = leg[0]
+		var boat: bool = leg[1]
+		var total := 0.0
+		for i in range(1, pts.size()):
+			total += (pts[i - 1] as Vector3).distance_to(pts[i])
+		if total < 0.01:
+			continue
+		var speed := 1.6 if boat else (1.35 if horse else 0.95)
+		var dur := clampf(total / speed, 0.3, 3.2)
+		var stride := 0.09 if horse else 0.07
+		if boat:
+			tw.tween_callback(func(): _boat_on(n))
 		tw.tween_method(func(t: float):
-			var q := a3.lerp(b3, t)
-			if by_sea2:
-				q.y += sin(t * PI) * 0.7
+			var dd := t * total
+			var q: Vector3 = pts[pts.size() - 1]
+			var dir := Vector3.ZERO
+			for i in range(1, pts.size()):
+				var a3: Vector3 = pts[i - 1]
+				var b3: Vector3 = pts[i]
+				var L := a3.distance_to(b3)
+				if dd <= L or i == pts.size() - 1:
+					var f := clampf(dd / maxf(L, 0.0001), 0.0, 1.0)
+					q = a3.lerp(b3, f)
+					dir = b3 - a3
+					break
+				dd -= L
+			var ph := t * total / stride
+			if boat:
+				q.y += 0.02 + sin(ph * 0.6) * 0.012
+				n.rotation.z = sin(ph * 0.5) * 0.06
 			else:
-				q.y += absf(sin(t * PI * steps)) * 0.045
-				n.rotation.z = sin(t * PI * steps) * 0.08
-			n.position = q, 0.0, 1.0, dur)
-	tw.tween_callback(func(): n.rotation.z = 0.0)
+				q.y += absf(sin(ph * PI)) * (0.05 if horse else 0.03)
+				n.rotation.z = sin(ph * PI) * (0.03 if horse else 0.07)
+			n.position = q
+			if turn_body and dir.length() > 0.001:
+				var want := atan2(dir.x, dir.z)
+				model.rotation.y = lerp_angle(model.rotation.y, want, 0.25), 0.0, 1.0, dur)
+		if boat:
+			tw.tween_callback(func(): _boat_off(n))
+	tw.tween_callback(func():
+		n.rotation.z = 0.0)
+	if turn_body:
+		tw.tween_property(model, "rotation:y", yaw0, 0.35).set_trans(Tween.TRANS_SINE)
+
+
+## Una barchetta sotto il personaggio per la traversata via porto.
+func _boat_on(n: Node3D) -> void:
+	if n.has_meta("boat") and is_instance_valid(n.get_meta("boat")):
+		return
+	var b := Node3D.new()
+	var wood := _mat(Color("#7a4a26"), 0.8)
+	var hull := MeshInstance3D.new()
+	var hm := CylinderMesh.new()
+	hm.top_radius = 0.11
+	hm.bottom_radius = 0.07
+	hm.height = 0.05
+	hull.mesh = hm
+	hull.material_override = wood
+	hull.scale = Vector3(0.75, 1.0, 1.7)
+	hull.position.y = -0.005
+	b.add_child(hull)
+	var mast := MeshInstance3D.new()
+	var mm := CylinderMesh.new()
+	mm.top_radius = 0.005
+	mm.bottom_radius = 0.006
+	mm.height = 0.32
+	mast.mesh = mm
+	mast.material_override = wood
+	mast.position = Vector3(0, 0.16, -0.1)
+	b.add_child(mast)
+	var sail := MeshInstance3D.new()
+	var sm := QuadMesh.new()
+	sm.size = Vector2(0.16, 0.2)
+	sail.mesh = sm
+	var smat := _mat(Color("#efe6cf"), 0.9)
+	smat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	sail.material_override = smat
+	sail.position = Vector3(0, 0.19, -0.1)
+	sail.rotation.y = PI / 2.0
+	b.add_child(sail)
+	n.add_child(b)
+	n.set_meta("boat", b)
+	b.scale = Vector3.ONE * 0.01
+	b.create_tween().tween_property(b, "scale", Vector3.ONE, 0.2)
+
+
+func _boat_off(n: Node3D) -> void:
+	if n.has_meta("boat") and is_instance_valid(n.get_meta("boat")):
+		var b: Node3D = n.get_meta("boat")
+		n.remove_meta("boat")
+		var tw := b.create_tween()
+		tw.tween_property(b, "scale", Vector3.ONE * 0.01, 0.2)
+		tw.tween_callback(b.queue_free)
 
 
 # ------------------------------------------------------------------ effetti di guerra e di pace

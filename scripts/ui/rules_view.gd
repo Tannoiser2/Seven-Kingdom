@@ -50,7 +50,7 @@ func _ready() -> void:
 	fl.add_theme_constant_override("h_separation", 14)
 	fl.add_theme_constant_override("v_separation", 14)
 	for c in SKData.CHARS:
-		var ic := UI.icon(SKData.CHAR_CARD[c], 280)
+		var ic := UI.icon(SKData.ccard(c), 280)
 		ic.custom_minimum_size = Vector2(280, 420)
 		fl.add_child(ic)
 	inner.add_child(fl)

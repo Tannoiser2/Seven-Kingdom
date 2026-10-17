@@ -39,6 +39,13 @@ Costo delle guerre, poi la partita finisce subito se: ci sono tre Guerre; ci son
 [b]PUNTEGGIO[/b]
 Ogni Governatore vale il numero più alto della Ricchezza non coperto dall'influenza religiosa; ogni altro villaggio vale la Ricchezza del suo regno. Ogni Vescovo vale 2 punti più 2 per ogni influenza religiosa del suo regno. Corona e Favore Papale valgono 2 punti ciascuno. Per ognuna delle cinque [b]risorse[/b] chi ne ha di più prende 5 punti, il secondo 3, il terzo 1 (a parità il premio scala al posto inferiore). Si aggiungono le carte obiettivo. A parità vince chi ha la Corona.
 
+[b]VARIANTE: LA BOTTEGA DELL'ALCHIMISTA[/b] (regola opzionale, prototipo 0.2)
+L'[b]Alchimista[/b] prende il posto del Mercante: stessa partenza, stessa passiva (+1 Ricchezza nel suo regno). Normale: pesca 1 [b]progetto[/b]; potenziata: ne pesca 2. Si può scegliere anche solo per muoverlo quando la pila è vuota.
+Il mazzo ha 24 progetti (12 tipi, due copie): 16 [b]Invenzioni[/b] monouso e 8 [b]Artefatti[/b] permanenti. Prima del piazzamento ognuno riceve 1 progetto segreto. Le [b]risorse non danno più punti[/b]: servono a pagare i progetti, e le risorse pagate vanno nella riserva delle risorse spese.
+Nel proprio turno, dopo l'azione: si può [b]realizzare un progetto[/b] (si paga tutto il costo e si prendono subito i PV stampati) e [b]usare un'Invenzione[/b] pronta, anche quella appena realizzata. Al massimo due Artefatti, di tipi diversi.
+Invenzioni: Cantiere istantaneo (un villaggio dove sei presente), Solvente degli invasori, Elisir della fortuna (Ricchezza ±1), Stivali del vento (un personaggio fa un passo), Incenso consacrato (aggiungi o togli influenza), Polvere del tuono (+2 alla tua battaglia), Mano invisibile (prendi una risorsa), Specchio degli scambi. Artefatti: Athanor (vedi un progetto in più e scartane uno), Bussola celeste (un passo in più nel movimento), Stendardo animato (+1 in battaglia), Trasmutatore (cambia una risorsa con una spesa).
+[i]Scelte della versione digitale[/i]: l'Incenso può far finire la partita (Ricchezza tutta coperta o Papa senza influenze) al controllo di fine turno; gli Stivali spostano anche un personaggio già usato, cambiando dove farà la sua passiva; con la guerra col dado la Polvere si somma al tiro; il Trasmutatore si può usare prima o dopo aver realizzato un progetto.
+
 [b]NOTE DELLA VERSIONE DIGITALE[/b]
 · Dal gioco spaziale Seven Planet vengono le risorse: il Mercante non manda più cubetti al Mercato, che non c'è più, ma ruba risorse agli avversari.
 · I villaggi si costruiscono dal sito più basso (il Governatore) verso l'alto; gli invasori arrivano dal sito più alto verso il basso.

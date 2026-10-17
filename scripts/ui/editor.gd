@@ -130,7 +130,7 @@ func _build_side() -> void:
 	for c in SKData.CHARS:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
-		var lb := UI.label(SKData.CHAR_SHORT[c], 17, UI.INK, UI.font_bold)
+		var lb := UI.label(SKData.cshort(c), 17, UI.INK, UI.font_bold)
 		lb.custom_minimum_size = Vector2(110, 0)
 		row.add_child(lb)
 		var ob := OptionButton.new()

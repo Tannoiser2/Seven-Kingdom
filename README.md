@@ -17,6 +17,10 @@ azione passiva, e alla fine del turno gli invasori dilagano nei regni rimasti se
   (6 ponti), più l'**editor delle mappe** per inventarne di nuove (si salvano sul dispositivo e si condividono con
   un codice `SK1:…`). Servono 11 ponti, o meno quando la disposizione non ha abbastanza lati in comune.
   Le rotte dei porti girano attorno alle tessere, in oro (Alba–Vespro) e in viola (Rupe–Bruma).
+- **Variante dell'Alchimista** (regola opzionale, prototipo 0.2): l'Alchimista sostituisce il Mercante e pesca
+  progetti (16 Invenzioni e 8 Artefatti, con le tessere illustrate) da realizzare con le risorse, che non danno più
+  punti. Mano segreta, fase dei progetti dopo l'azione, IA che li realizza e li usa, miniatura 3D dedicata.
+- **Personaggi in cammino**: si girano verso la meta, passano sui ponti e attraversano il mare in barca lungo la rotta.
 - **Tutorial**: una partita di prova guidata contro due IA facili che spiega mappa, piazzamento, i sei personaggi
   (la prima volta la scelta è guidata), azioni passive, fine turno, guerre, pace, battaglie e punteggio.
 - **Battaglie chiare**: prima di decidere se spendere il Favore Papale o aiutare come Governatore, un riquadro

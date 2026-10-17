@@ -103,6 +103,24 @@ func _pause(kind: String, who := -1) -> void:
 	await pause_cb.call(kind, who, lines, regs.keys())
 
 
+## Variante dell'Alchimista: dopo l'azione, lo scarto dell'Athanor e la fase dei progetti.
+func _alchemy_phase(p: int) -> void:
+	if not st.pending_ath[p].is_empty():
+		var d = await ask(p, {"type": "athanor", "cards": st.pending_ath[p].duplicate()})
+		st.resolve_athanor(p, int(d) if (d is int or d is float) else 0)
+		flush_log()
+		changed.emit()
+	if st.projects_possible(p):
+		var v = await ask(p, {"type": "projects"})
+		if v is Dictionary and not v.is_empty():
+			if st.check_projects(p, v) == "":
+				st.apply_projects(p, v)
+			else:
+				log_msg("(progetti non consentiti: %s)" % st.check_projects(p, v))
+		flush_log()
+		changed.emit()
+
+
 func provide_decision(r) -> void:
 	decision_provided.emit(r)
 
@@ -196,6 +214,8 @@ func play_turn() -> void:
 			log_msg("(mossa non consentita: %s)" % st.check_move(p, m if m is Dictionary else {}))
 		flush_log()
 		changed.emit()
+		if st.alch():
+			await _alchemy_phase(p)
 		await _pause("move", p)
 	cur = -1
 	_set_phase("passive")

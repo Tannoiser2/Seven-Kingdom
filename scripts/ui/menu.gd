@@ -11,7 +11,7 @@ var levels := [1, 1, 1, 1]
 var names := ["Casato Rosso", "Casato Blu", "Casato Verde", "Casato Giallo"]
 var speed := 1
 var scen_i := 0
-var opts := {"objectives": true, "dice": false}
+var opts := {"objectives": true, "dice": false, "alchemist": false}
 var map3d := true
 var pieces3d := true
 var msg: Label
@@ -22,6 +22,7 @@ var scens: Array = []
 const OPT_LIST := [
 	["objectives", "Carte obiettivo", "Ognuno pesca 3 carte obiettivo e ne tiene una in segreto: punti extra a fine partita (o la vittoria, per il Nemico e l'Usurpatore). Consigliate per le prime partite."],
 	["dice", "Guerra col dado", "Regola opzionale: in battaglia si tira un dado e si vince superando il numero di invasori (+1 Favore Papale, +1 Fanteria, +1 Governatore)."],
+	["alchemist", "Alchimista", "Variante sperimentale «La bottega dell'Alchimista»: l'Alchimista prende il posto del Mercante e pesca progetti (Invenzioni e Artefatti) da realizzare con le risorse, che non danno più punti a fine partita."],
 ]
 
 

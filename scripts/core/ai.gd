@@ -67,6 +67,16 @@ func decide(eng, s: int, req: Dictionary):
 			return ch2.battle_favor(s, int(req["r"]))
 		"battle_gov":
 			return int(req["p"]) == s
+		"athanor":
+			# si scarta il progetto meno utile (lo stesso criterio di auto_athanor)
+			var cards: Array = req["cards"]
+			var worst := 0
+			for i in cards.size():
+				if st.proj_value(s, cards[i]) < st.proj_value(s, cards[worst]):
+					worst = i
+			return worst
+		"projects":
+			return best_projects(st, s)
 	return null
 
 
@@ -139,7 +149,7 @@ func legal_moves(st: SKState, p: int) -> Array:
 	if st.favor[p]:
 		pws.append(true)
 	for c in st.available_chars():
-		for path in st.move_paths(c):
+		for path in st.move_paths(c, p):
 			var dest: int = path[path.size() - 1]
 			for pw in pws:
 				out.append_array(_moves_for(st, p, c, path, dest, pw))
@@ -286,6 +296,9 @@ func _moves_for(st: SKState, p: int, c: String, path: Array, dest: int, pw: bool
 func simulate(st: SKState, p: int, m: Dictionary, deep := false) -> float:
 	var c := st.clone()
 	c.apply_move(p, m)
+	if c.alch():
+		c.auto_athanor(p)
+		_quick_projects(c, p)
 	if deep:
 		var helper := SKAI.new(1, 7)
 		_finish_actions(c, p, helper)
@@ -340,6 +353,8 @@ func evaluate(c: SKState, p: int) -> float:
 			v -= 0.5 * mine_here
 	# villaggi ancora in riserva: possibilità future
 	v += 0.15 * c.reserve[p]
+	if c.alch():
+		v += _alch_potential(c, p)
 	if c.game_over:
 		# chiudere la partita conviene solo a chi è davanti; nei primi turni l'IA non ha fretta
 		var rk := c.ranking()
@@ -381,3 +396,115 @@ func best_move(st: SKState, p: int, fast := false) -> Dictionary:
 		if s[0] >= scored[0][0] - 0.25:
 			near.append(s[1])
 	return near[rng.randi_range(0, near.size() - 1)]
+
+
+# ------------------------------------------------------------------ variante dell'Alchimista
+
+## Valore futuro dei progetti: in mano (secondo quanto manca a pagarli), Invenzioni pronte,
+## risorse ancora utili per pagare, effetti degli Artefatti.
+func _alch_potential(c: SKState, p: int) -> float:
+	var v := 0.0
+	# un progetto in mano vale una parte dei suoi PV (di più se si può già pagare), sempre meno che realizzarlo
+	for id in c.hand[p]:
+		var d: Dictionary = SKData.PROJECTS[id]
+		if not c.build_allowed(p, id):
+			continue
+		v += 0.6 * float(d["pv"]) * (1.0 if c.can_afford(p, id) else 0.55)
+	v += 1.1 * c.ready_inventions(p).size()
+	v += 0.3 * c.total_res(p)
+	if c.has_art(p, "A02"):
+		v += 1.0
+	if c.has_art(p, "A03"):
+		v += 0.8
+	if c.has_art(p, "A04"):
+		v += 0.8
+	if c.has_art(p, "A01"):
+		v += 0.6
+	return v
+
+
+## Nelle simulazioni: realizza il progetto più ricco che si può pagare (senza usare Invenzioni).
+func _quick_projects(c: SKState, p: int) -> void:
+	var best := ""
+	var bv := -1
+	for id in c.hand[p]:
+		if c.can_afford(p, id) and c.build_allowed(p, id):
+			var pv := int(SKData.PROJECTS[id]["pv"])
+			if pv > bv:
+				bv = pv
+				best = id
+	if best != "":
+		c._do_projects(p, {"b": best})
+
+
+## Fase dei progetti dell'IA: sceglie Trasmutatore e progetto da realizzare (valutazione rapida),
+## poi l'Invenzione da usare (simulando fino alla fine del turno) solo se conviene più che tenerla.
+func best_projects(st: SKState, p: int) -> Dictionary:
+	var trs := [[]]
+	if st.has_art(p, "A04") or st.hand[p].has("A04"):
+		for g in SKData.RESOURCES:
+			if int(st.res[p][g]) <= 0:
+				continue
+			for t in SKData.RESOURCES:
+				if t != g and int(st.spent[t]) > 0:
+					trs.append([g, t])
+	var builds := [""]
+	for id in st.hand[p]:
+		if not builds.has(id):
+			builds.append(id)
+	var base := {}
+	var bvv := -99999.0
+	for tr in trs:
+		for b in builds:
+			var v := {}
+			if not tr.is_empty():
+				v["t"] = tr
+			if b != "":
+				v["b"] = b
+			if v.is_empty() and not base.is_empty():
+				continue
+			var c := st.clone()
+			if not v.is_empty() and c._do_projects(p, v) != "":
+				continue
+			var val := evaluate(c, p) + rng.randf() * (0.6 if level == 0 else 0.05)
+			if val > bvv:
+				bvv = val
+				base = v
+	# l'Invenzione: si confronta l'esito a fine turno con e senza usarla
+	var c0 := st.clone()
+	if not base.is_empty():
+		c0._do_projects(p, base)
+	var ready := c0.ready_inventions(p)
+	if ready.is_empty():
+		return base
+	var keep := _after_turn(c0, p)
+	var best_u := {}
+	# tenerla pronta vale già 1,1 nella valutazione: si usa se l'effetto rende almeno un po' di più
+	var best_v := keep + (0.3 if st.turn < 3 else -0.6)
+	for id in ready:
+		var uses := c0.invention_uses(p, id)
+		if uses.size() > 40:
+			for i in range(uses.size() - 1, 0, -1):
+				var j := rng.randi_range(0, i)
+				var tmp = uses[i]
+				uses[i] = uses[j]
+				uses[j] = tmp
+			uses = uses.slice(0, 40)
+		for u in uses:
+			var c1 := c0.clone()
+			if c1._do_projects(p, {"u": u}) != "":
+				continue
+			var val := _after_turn(c1, p)
+			if val > best_v:
+				best_v = val
+				best_u = u
+	if not best_u.is_empty():
+		base["u"] = best_u
+	return base
+
+
+func _after_turn(c: SKState, p: int) -> float:
+	var x := c.clone()
+	x.call("passive_phase", SimChooser.new(p, x))
+	x.call("end_phase", null)
+	return evaluate(x, p)

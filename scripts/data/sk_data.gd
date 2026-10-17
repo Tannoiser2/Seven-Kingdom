@@ -461,3 +461,79 @@ static func validate_scenario(s: Dictionary) -> Array:
 		if not used.has(st.get(c, "")):
 			errs.append("Manca la partenza di %s." % CHAR_NAME[c])
 	return errs
+
+
+# ------------------------------------------------------------------ variante dell'Alchimista
+## «La bottega dell'Alchimista» (prototipo 0.2 di Stefano Ancillai): l'Alchimista prende il posto del
+## Mercante (stessa pedina, stessa partenza e stessa passiva) e invece di rubare pesca progetti.
+## Internamente il personaggio resta "mercante": cambiano nomi, testi e immagini.
+
+static var alch := false
+
+const PROJ_IDS := ["I01", "I02", "I03", "I04", "I05", "I06", "I07", "I08", "A01", "A02", "A03", "A04"]
+const PROJECTS := {
+	"I01": {"n": "Cantiere istantaneo", "kind": "inv", "cost": {"legno": 1, "pietra": 2}, "pv": 2,
+		"t": "Dopo la tua azione: piazza 1 tuo villaggio nel primo sito libero di un regno dove sei già presente, senza guerra né eserciti. Raccogli l'eventuale risorsa."},
+	"I02": {"n": "Solvente degli invasori", "kind": "inv", "cost": {"grano": 1, "ferro": 1}, "pv": 2,
+		"t": "Dopo la tua azione: in un regno non in guerra dove hai un villaggio, rimuovi l'invasore dal numero più basso. Non costruisci al suo posto."},
+	"I03": {"n": "Elisir della fortuna", "kind": "inv", "cost": {"grano": 1, "oro": 1}, "pv": 1,
+		"t": "Dopo la tua azione: in un regno non in guerra dove hai un villaggio, aumenta o diminuisci la Ricchezza di 1 (non sotto 1, non oltre 5 né oltre un'influenza religiosa)."},
+	"I04": {"n": "Stivali del vento", "kind": "inv", "cost": {"legno": 1, "grano": 1}, "pv": 1,
+		"t": "Dopo la tua azione: muovi di 1 passo legale un personaggio a scelta, anche già usato nel turno. Non compie azioni e non torna disponibile."},
+	"I05": {"n": "Incenso consacrato", "kind": "inv", "cost": {"pietra": 1, "oro": 1}, "pv": 1,
+		"t": "Dopo la tua azione: in un regno non in guerra dove hai un villaggio, aggiungi 1 influenza religiosa al valore scoperto più alto oppure rimuovi quella al valore occupato più basso."},
+	"I06": {"n": "Polvere del tuono", "kind": "inv", "cost": {"pietra": 1, "ferro": 2}, "pv": 2,
+		"t": "Dopo aver dichiarato battaglia: la tua battaglia dichiarata in questo turno riceve +2 forza nella passiva."},
+	"I07": {"n": "Mano invisibile", "kind": "inv", "cost": {"grano": 1, "oro": 1}, "pv": 2,
+		"t": "Dopo la tua azione: prendi 1 risorsa a scelta dalla riserva di un avversario qualsiasi."},
+	"I08": {"n": "Specchio degli scambi", "kind": "inv", "cost": {"legno": 1, "oro": 1}, "pv": 1,
+		"t": "Dopo la tua azione: scambia 1 tuo villaggio e 1 avversario in due regni collegati da un ponte (non i siti 1 né gli invasori). Ammesso anche in guerra."},
+	"A01": {"n": "Athanor", "kind": "art", "cost": {"legno": 1, "pietra": 1, "ferro": 1}, "pv": 3,
+		"t": "Quando usi l'Alchimista: guarda 1 progetto in più, poi scartane 1 fra quelli appena visti."},
+	"A02": {"n": "Bussola celeste", "kind": "art", "cost": {"legno": 1, "ferro": 1, "oro": 1}, "pv": 2,
+		"t": "Nel movimento prima dell'azione il personaggio scelto può fare 1 passo in più (la Cavalleria fino a 3), senza visitare due volte un regno."},
+	"A03": {"n": "Stendardo animato", "kind": "art", "cost": {"legno": 1, "grano": 1, "ferro": 1}, "pv": 2,
+		"t": "Nelle tue battaglie: +1 alla tua forza."},
+	"A04": {"n": "Trasmutatore", "kind": "art", "cost": {"pietra": 1, "grano": 1, "oro": 1}, "pv": 2,
+		"t": "Una volta nel tuo turno, dopo l'azione: scambia 1 tua risorsa con 1 di tipo diverso dalla riserva delle risorse spese."},
+}
+
+static func proj_img(id: String) -> String:
+	return "res://assets/alch/%s.webp" % id
+
+
+static func cn(c: String) -> String:
+	return "L'Alchimista" if alch and c == "mercante" else CHAR_NAME[c]
+
+
+static func cshort(c: String) -> String:
+	return "Alchimista" if alch and c == "mercante" else CHAR_SHORT[c]
+
+
+static func cbrief(c: String) -> Array:
+	if alch and c == "mercante":
+		return ["Pesca 1 progetto (Invenzione o Artefatto).", "Pesca 2 progetti."]
+	return CHAR_BRIEF[c]
+
+
+static func cpassive(c: String) -> String:
+	return CHAR_PASSIVE[c]
+
+
+static func ctext(c: String) -> Dictionary:
+	if alch and c == "mercante":
+		return {"normale": "Pesca 1 progetto dalla pila: è segreto finché non lo realizzi pagandone il costo in risorse.",
+			"potenziata": "Pesca 2 progetti.", "passiva": CHAR_TEXT["mercante"]["passiva"]}
+	return CHAR_TEXT[c]
+
+
+static func ccard(c: String) -> String:
+	return "res://assets/alch/alchimista_carta.webp" if alch and c == "mercante" else CHAR_CARD[c]
+
+
+static func cart(c: String) -> String:
+	return "res://assets/chars/%s_art.webp" % ("alchimista" if alch and c == "mercante" else c)
+
+
+static func cmodel(c: String) -> String:
+	return "alchimista" if alch and c == "mercante" and ResourceLoader.exists("res://assets/models/alchimista.glb") else c

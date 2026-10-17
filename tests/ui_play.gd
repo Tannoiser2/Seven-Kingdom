@@ -8,6 +8,8 @@ var main
 var rng := RandomNumberGenerator.new()
 var bad := 0
 var moves := {}
+var alch_all := OS.get_environment("ALCH") == "1"
+var proj_stats := {"fasi": 0, "realizzati": 0, "usati": 0, "rifiutati": 0}
 
 
 func _initialize() -> void:
@@ -28,7 +30,7 @@ func _run() -> void:
 	for g in games:
 		var players := [{"name": "Umano", "ai": false, "level": 1}, {"name": "IA1", "ai": true, "level": 1}, {"name": "IA2", "ai": true, "level": 0}]
 		var sc: Dictionary = SKData.SCENARIOS[g % SKData.SCENARIOS.size()]
-		main.start_game({"players": players, "colors": [0, 1, 2], "seed": 300 + g, "ai_delay": 0.0, "opts": {"objectives": true, "dice": g % 2 == 1},
+		main.start_game({"players": players, "colors": [0, 1, 2], "seed": 300 + g, "ai_delay": 0.0, "opts": {"objectives": true, "dice": g % 2 == 1, "alchemist": g % 2 == 0 or alch_all},
 			"scenario": sc, "map3d": g % 2 == 0, "pieces3d": g % 3 != 0})
 		await wait(5)
 		var view = main.current
@@ -42,6 +44,7 @@ func _run() -> void:
 			await _act(view)
 		print("partita %d (%s): turni %d, fine per %s, vince %s" % [g, sc["id"], view.engine.st.turn, view.engine.st.end_reason, view.engine.pname(view.engine.results[0]["p"]) if not view.engine.results.is_empty() else "?"])
 	print("mosse dell'interfaccia per personaggio: ", moves)
+	print("progetti: ", proj_stats)
 	print("mosse rifiutate: ", bad)
 	quit(1 if bad > 0 else 0)
 
@@ -66,6 +69,10 @@ func _act(view) -> void:
 			view._provide(rng.randf() < 0.5)
 		"turn":
 			await _turn(view)
+		"athanor":
+			view._provide(rng.randi_range(0, req["cards"].size() - 1))
+		"projects":
+			await _projects(view)
 
 
 func _turn(view) -> void:
@@ -139,4 +146,62 @@ func _turn(view) -> void:
 		bad += 1
 		print("RIFIUTATA: ", err, " ", m, " passo ", view.step)
 	view._provide(m)
+	await wait(1)
+
+
+func _projects(view) -> void:
+	var st: SKState = view.engine.st
+	var me: int = view._me()
+	proj_stats["fasi"] += 1
+	# a volte il Trasmutatore
+	if st.has_art(me, "A04") and rng.randf() < 0.3:
+		for g in SKData.RESOURCES:
+			if st.res[me][g] > 0:
+				for t in SKData.RESOURCES:
+					if t != g and st.spent[t] > 0:
+						view.psel["t"] = [g, t]
+						break
+				break
+	for id in st.hand[me]:
+		var c := st.clone()
+		if not view.psel["t"].is_empty():
+			c._transmute(me, view.psel["t"])
+		if c.can_afford(me, id) and st.build_allowed(me, id) and rng.randf() < 0.8:
+			view.psel["b"] = id
+			break
+	var ready: Array = view._proj_state().ready_inventions(me)
+	if not ready.is_empty() and rng.randf() < 0.7:
+		var id: String = _pick(ready)
+		var uses: Array = view._proj_uses(id)
+		if not uses.is_empty():
+			view._proj_pick_use(id)
+			var u: Dictionary = _pick(uses)
+			match view.pstep:
+				"region", "variant":
+					view._proj_region(int(u["r"]))
+					if view.pstep == "variant":
+						view.psel["u"] = u
+						view.pstep = ""
+				"char":
+					view._pick_char(u["c"])
+					view._proj_region(int(u["to"]))
+				"res":
+					view._on_house_res(int(u["q"]), u["t"])
+				"site_a":
+					view._proj_site(int(u["a"][0]), int(u["a"][1]))
+					view._proj_site(int(u["b"][0]), int(u["b"][1]))
+	await wait(1)
+	var v: Dictionary = view._proj_value()
+	var err := st.check_projects(me, v)
+	if err != "" or (view.psel.get("uid", "") != "" and view.psel.get("u", {}).is_empty()):
+		proj_stats["rifiutati"] += 1
+		print("PROGETTI RIFIUTATI: ", err, " ", v, " passo ", view.pstep)
+		bad += 1
+		view._provide({})
+		return
+	if v.has("b"):
+		proj_stats["realizzati"] += 1
+	if v.has("u"):
+		proj_stats["usati"] += 1
+	view._provide(v)
 	await wait(1)

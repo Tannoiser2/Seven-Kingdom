@@ -66,6 +66,80 @@ func _run() -> void:
 			await shot("mappa_" + sc["id"])
 		quit()
 		return
+	if mode == "walk":
+		var pl2 := [{"name": "Stefano", "ai": false, "level": 1}, {"name": "Simone", "ai": true, "level": 1}]
+		main.start_game({"players": pl2, "colors": [0, 1], "seed": 77, "ai_delay": 0.0, "opts": {"alchemist": true},
+			"scenario": SKData.scenario("base"), "map3d": m3, "pieces3d": p3})
+		await wait(30)
+		var g2 = gv()
+		var st2: SKState = g2.engine.st
+		var b = g2.board
+		# l'Alchimista via mare e la Cavalleria via ponti
+		var mr: int = -1
+		for r in st2.regions.size():
+			if st2.sea[r] >= 0:
+				mr = r
+				break
+		st2.chars["mercante"] = mr
+		b.refresh(false)
+		await wait(5)
+		var cr: int = st2.chars["cavalleria"]
+		var sea_to: int = st2.sea[mr] if st2.sea[mr] >= 0 else st2.land[mr][0]
+		var c2: int = st2.land[cr][0]
+		st2.events.append({"k": "move", "c": "mercante", "path": [mr, sea_to]})
+		st2.events.append({"k": "move", "c": "cavalleria", "path": [cr, c2]})
+		st2.chars["mercante"] = sea_to
+		st2.chars["cavalleria"] = c2
+		b.refresh(true)
+		b.zoom(0.55)
+		b.target = (b.region_center[mr] + b.region_center[sea_to]) / 2.0
+		b._update_cam()
+		for k in 4:
+			await wait(int(18 + k * 4))
+			await shot("cammino_%d" % k)
+		quit()
+		return
+	if mode == "alch":
+		var pl := [{"name": "Stefano", "ai": false, "level": 1}, {"name": "Simone", "ai": true, "level": 1}, {"name": "Laura", "ai": true, "level": 1}]
+		main.start_game({"players": pl, "colors": [0, 1, 2], "seed": 77, "ai_delay": 0.0, "opts": {"alchemist": true},
+			"scenario": SKData.scenario("base"), "map3d": m3, "pieces3d": p3})
+		await wait(20)
+		var g = gv()
+		g.auto_next = true
+		var t0 := Time.get_ticks_msec()
+		while (g.pending.is_empty() or g.pending["type"] != "turn") and Time.get_ticks_msec() - t0 < 60000:
+			await wait(2)
+			auto_answer()
+		var st: SKState = g.engine.st
+		st.hand[0] = ["I01", "I07", "A02"]
+		st.built[0] = [{"id": "A01", "used": false, "turn": 0}, {"id": "A04", "used": false, "turn": 0}, {"id": "I03", "used": false, "turn": 0}]
+		st.built[1] = [{"id": "I05", "used": true, "turn": 0}]
+		for t in SKData.RESOURCES:
+			st.res[0][t] = 2
+		st.spent["oro"] = 2
+		g.refresh()
+		await wait(10)
+		if not st.used.has("mercante"):
+			g._pick_char("mercante")
+			await wait(5)
+			g._on_region(g._dests()[0])
+			await wait(30)
+			await shot("alch_mossa")
+			g._provide(g._move())
+			await wait(20)
+			await shot("alch_athanor")
+			if g.pending.get("type", "") == "athanor":
+				g._provide(0)
+			await wait(20)
+			if g.pending.get("type", "") == "projects":
+				g.psel["b"] = "I01"
+				g._proj_pick_use("I03")
+				g.refresh()
+				g._build_prompt()
+				await wait(10)
+				await shot("alch_progetti")
+		quit()
+		return
 	if mode == "editor":
 		main.show_editor()
 		await wait(5)
