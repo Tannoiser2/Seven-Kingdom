@@ -784,6 +784,49 @@ func _mitre() -> Node3D:
 	return n
 
 
+## Miniatura 3D di un personaggio. Le figure umane hanno lo scheletro (rigging Meshy): ferme stanno
+## nella posa della miniatura, quando si spostano camminano davvero. La Cavalleria resta un modello fisso.
+func _char3d(c: String) -> Node3D:
+	var h := 0.42 if c != "cavalleria" else 0.44
+	var m := SKData.cmodel(c)
+	var path := "res://assets/models/%s_walk.glb" % m
+	if c == "cavalleria" or not ResourceLoader.exists(path):
+		return _fit(_model(m), h)
+	var holder := Node3D.new()
+	var fig := _model(m + "_walk")
+	# il personaggio con lo scheletro è alto circa 1,7 (metri): lo si porta all'altezza della pedina
+	fig.scale = Vector3.ONE * (h / 1.7)
+	holder.add_child(fig)
+	var aps := fig.find_children("*", "AnimationPlayer", true, false)
+	if not aps.is_empty():
+		var ap: AnimationPlayer = aps[0]
+		var names := ap.get_animation_list()
+		if not names.is_empty():
+			ap.get_animation(names[0]).loop_mode = Animation.LOOP_LINEAR
+			holder.set_meta("ap", ap)
+			holder.set_meta("anim", names[0])
+		_rest_pose(fig)
+	return holder
+
+
+func _rest_pose(fig: Node) -> void:
+	for sk in fig.find_children("*", "Skeleton3D", true, false):
+		(sk as Skeleton3D).reset_bone_poses()
+
+
+func _anim_walk(n: Node3D, on: bool, speed := 1.0) -> void:
+	if not n.has_meta("ap"):
+		return
+	var ap: AnimationPlayer = n.get_meta("ap")
+	if not is_instance_valid(ap):
+		return
+	if on:
+		ap.play(n.get_meta("anim"), 0.15, speed)
+	else:
+		ap.stop()
+		_rest_pose(n)
+
+
 ## Pedina 2D di un personaggio: un grande gettone rotondo con il ritratto.
 func _portrait_token(c: String) -> Node3D:
 	var n := Node3D.new()
@@ -1051,7 +1094,7 @@ func _make(kind: String, v) -> Node3D:
 		"char":
 			var c: String = v
 			if pieces3d:
-				return _fit(_model(SKData.cmodel(c)), 0.42 if c != "cavalleria" else 0.44)
+				return _char3d(c)
 			return _portrait_token(c)
 	return Node3D.new()
 
@@ -1208,6 +1251,8 @@ func _walk(n: Node3D, c: String, dest: int, pos: Vector3, st: SKState) -> void:
 	var tw := n.create_tween()
 	n.set_meta("walk", tw)
 	var horse := c == "cavalleria"
+	var skinned := n.has_meta("ap")
+	_anim_walk(n, true, 1.3)
 	var turn_body := pieces3d
 	var model: Node3D = n
 	var yaw0 := 0.0
@@ -1223,7 +1268,9 @@ func _walk(n: Node3D, c: String, dest: int, pos: Vector3, st: SKState) -> void:
 		var dur := clampf(total / speed, 0.3, 3.2)
 		var stride := 0.09 if horse else 0.07
 		if boat:
-			tw.tween_callback(func(): _boat_on(n))
+			tw.tween_callback(func():
+				_boat_on(n)
+				_anim_walk(n, false))
 		tw.tween_method(func(t: float):
 			var dd := t * total
 			var q: Vector3 = pts[pts.size() - 1]
@@ -1242,6 +1289,8 @@ func _walk(n: Node3D, c: String, dest: int, pos: Vector3, st: SKState) -> void:
 			if boat:
 				q.y += 0.02 + sin(ph * 0.6) * 0.012
 				n.rotation.z = sin(ph * 0.5) * 0.06
+			elif skinned:
+				pass
 			else:
 				q.y += absf(sin(ph * PI)) * (0.05 if horse else 0.03)
 				n.rotation.z = sin(ph * PI) * (0.03 if horse else 0.07)
@@ -1250,9 +1299,12 @@ func _walk(n: Node3D, c: String, dest: int, pos: Vector3, st: SKState) -> void:
 				var want := atan2(dir.x, dir.z)
 				model.rotation.y = lerp_angle(model.rotation.y, want, 0.25), 0.0, 1.0, dur)
 		if boat:
-			tw.tween_callback(func(): _boat_off(n))
+			tw.tween_callback(func():
+				_boat_off(n)
+				_anim_walk(n, true, 1.3))
 	tw.tween_callback(func():
-		n.rotation.z = 0.0)
+		n.rotation.z = 0.0
+		_anim_walk(n, false))
 	if turn_body:
 		tw.tween_property(model, "rotation:y", yaw0, 0.35).set_trans(Tween.TRANS_SINE)
 

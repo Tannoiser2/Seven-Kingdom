@@ -85,18 +85,22 @@ func _run() -> void:
 		await wait(5)
 		var cr: int = st2.chars["cavalleria"]
 		var sea_to: int = st2.sea[mr] if st2.sea[mr] >= 0 else st2.land[mr][0]
+		cr = st2.chars["re"]
 		var c2: int = st2.land[cr][0]
 		st2.events.append({"k": "move", "c": "mercante", "path": [mr, sea_to]})
-		st2.events.append({"k": "move", "c": "cavalleria", "path": [cr, c2]})
+		st2.events.append({"k": "move", "c": "re", "path": [cr, c2]})
 		st2.chars["mercante"] = sea_to
-		st2.chars["cavalleria"] = c2
+		st2.chars["re"] = c2
 		b.refresh(true)
-		b.zoom(0.55)
-		b.target = (b.region_center[mr] + b.region_center[sea_to]) / 2.0
+		b.zoom(0.35)
+		b.target = (b.region_center[cr] + b.region_center[c2]) / 2.0
 		b._update_cam()
-		for k in 4:
-			await wait(int(18 + k * 4))
+		await shot("cammino_0")
+		for k in range(1, 4):
+			await wait(10)
 			await shot("cammino_%d" % k)
+		await wait(200)
+		await shot("cammino_fermo")
 		quit()
 		return
 	if mode == "alch":
