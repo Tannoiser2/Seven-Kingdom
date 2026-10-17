@@ -13,9 +13,10 @@ const TILE_SCALE := 0.955
 const TILE_D := 1.7466        # profondità della tessera (2 × 1172/1342)
 const BASE_3D := 0.09
 const BASE_2D := 0.012
-const BOARD_W := 7.71
-const BOARD_H := 7.99
-const BOARD_Z := -0.244
+# il tabellone del mare è più grande della griglia delle tessere: il titolo resta libero in alto
+const BOARD_W := 7.71 * 1.16
+const BOARD_H := 7.99 * 1.16
+const BOARD_Z := -0.244 - 0.42
 
 var eng
 var map3d := true
@@ -54,9 +55,9 @@ var _t := 0.0
 # telecamera
 var yaw := 0.0
 var pitch := 60.0
-var dist := 9.6
-var target := Vector3(0.4, 0, 0.35)
-var ortho_size := 8.3
+var dist := 11.2
+var target := Vector3(0.4, 0, -0.05)
+var ortho_size := 10.0
 var _drag := false
 var _rdrag := false
 var _moved := 0.0
@@ -209,9 +210,15 @@ func build_map() -> void:
 		var outward := em.normalized()
 		port_pos[pt["id"]] = [at, outward]
 		root_tiles.add_child(_port(pt["id"], Vector3(at.x, base_y(), at.y), outward))
+	var centers := []
+	for r in st.regions.size():
+		centers.append(SKData.pos_center(int(st.regions[r]["pos"])))
+	var k := 0
 	for pr in [["alba", "vespro"], ["rupe", "bruma"]]:
 		if port_pos.has(pr[0]) and port_pos.has(pr[1]):
-			_route(port_pos[pr[0]], port_pos[pr[1]], Color("#f3d58c") if pr[0] == "alba" else Color("#d6b8f0"))
+			var pts := SKData.sea_route(port_pos[pr[0]][0], port_pos[pr[0]][1], port_pos[pr[1]][0], port_pos[pr[1]][1], centers, PORT_D, 1.35 + 0.3 * k, Vector2(BOARD_W / 2.0 - 0.2, BOARD_H / 2.0 - 0.2), Vector2(0, BOARD_Z))
+			_route_pts(pts, SKData.ROUTE_COLORS[pr[0]])
+			k += 1
 
 
 func _skirt(h: float) -> MeshInstance3D:
@@ -355,6 +362,46 @@ func _route(a: Array, b: Array, col: Color) -> void:
 		var d := p1 - p0
 		seg.rotation.y = -atan2(d.y, d.x) + PI / 2.0
 		root_tiles.add_child(seg)
+
+
+## Rotta tratteggiata lungo una polilinea (sul mare, fuori dalle tessere).
+func _route_pts(pts: Array, col: Color) -> void:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = col
+	m.emission_enabled = true
+	m.emission = col * 0.6
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	# trattini di lunghezza costante lungo tutta la linea
+	var dash := 0.16
+	var gap := 0.1
+	var acc := 0.0
+	var on := true
+	for i in range(1, pts.size()):
+		var a: Vector2 = pts[i - 1]
+		var b: Vector2 = pts[i]
+		var L := a.distance_to(b)
+		var t := 0.0
+		while t < L:
+			var left := (dash if on else gap) - acc
+			var stepl := minf(left, L - t)
+			if on and stepl > 0.005:
+				var p0 := a.lerp(b, t / L)
+				var p1 := a.lerp(b, (t + stepl) / L)
+				var seg := MeshInstance3D.new()
+				var bm := BoxMesh.new()
+				bm.size = Vector3(0.05, 0.004, p0.distance_to(p1))
+				seg.mesh = bm
+				seg.material_override = m
+				var mid := (p0 + p1) / 2.0
+				seg.position = Vector3(mid.x, 0.006, mid.y)
+				var d := p1 - p0
+				seg.rotation.y = -atan2(d.y, d.x) + PI / 2.0
+				root_tiles.add_child(seg)
+			t += stepl
+			acc += stepl
+			if acc >= (dash if on else gap) - 0.0001:
+				acc = 0.0
+				on = not on
 
 
 func _bez(a: Vector2, c: Vector2, b: Vector2, t: float) -> Vector2:
@@ -1718,7 +1765,7 @@ func _update_cam() -> void:
 	else:
 		cam.projection = Camera3D.PROJECTION_ORTHOGONAL
 		cam.size = ortho_size
-		cam.position = Vector3(target.x, 20, target.z - 0.35)
+		cam.position = Vector3(target.x, 20, target.z - 0.6)
 		cam.rotation_degrees = Vector3(-90, 0, 0)
 		cam.h_offset = view_offset.x * ortho_size * 0.05
 		cam.v_offset = view_offset.y * ortho_size * 0.05
@@ -1727,9 +1774,9 @@ func _update_cam() -> void:
 func reset_view() -> void:
 	yaw = 0.0
 	pitch = 60.0
-	dist = 9.6
-	ortho_size = 8.3
-	target = Vector3(0.4, 0, 0.35)
+	dist = 11.2
+	ortho_size = 10.0
+	target = Vector3(0.4, 0, -0.05)
 	_update_cam()
 
 

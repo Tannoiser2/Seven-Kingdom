@@ -162,10 +162,14 @@ func _build() -> void:
 	btns.add_theme_constant_override("h_separation", 12)
 	btns.add_theme_constant_override("v_separation", 12)
 	col.add_child(btns)
-	var play := UI.primary(UI.button("Gioca", 180, 60, 26))
+	var play := UI.primary(UI.button("Gioca", 150, 60, 26))
 	play.pressed.connect(_on_start)
 	btns.add_child(play)
-	var onl := UI.button("Gioca online", 210, 60, 21)
+	var tut := UI.button("Tutorial", 140, 60, 20)
+	tut.tooltip_text = "Una partita di prova guidata che spiega le regole passo passo"
+	tut.pressed.connect(_on_tutorial)
+	btns.add_child(tut)
+	var onl := UI.button("Gioca online", 190, 60, 20)
 	onl.pressed.connect(_online_panel)
 	btns.add_child(onl)
 	var rul := UI.button("Regole", 130, 60, 21)
@@ -173,7 +177,7 @@ func _build() -> void:
 		_store()
 		main.show_rules())
 	btns.add_child(rul)
-	var edi := UI.button("Editor delle mappe", 240, 60, 19)
+	var edi := UI.button("Editor mappe", 170, 60, 19)
 	edi.pressed.connect(func():
 		_store()
 		main.show_editor())
@@ -321,6 +325,14 @@ func _config() -> Dictionary:
 			o[k] = true
 	return {"players": players, "colors": colors, "ai_delay": speeds[speed], "opts": o, "scenario": scens[scen_i],
 		"map3d": map3d, "pieces3d": pieces3d, "seed": 1 + randi() % 2000000000}
+
+
+## Partita di prova guidata: tu (Rosso) contro due IA facili, mappa originale, senza carte obiettivo.
+func _on_tutorial() -> void:
+	_store()
+	main.start_game({"players": [{"name": "Tu", "ai": false, "level": 1}, {"name": "Simone", "ai": true, "level": 0},
+		{"name": "Laura", "ai": true, "level": 0}], "colors": [0, 1, 2], "ai_delay": 0.7, "opts": {},
+		"scenario": SKData.SCENARIOS[0], "map3d": map3d, "pieces3d": pieces3d, "seed": 2026, "tutorial": true})
 
 
 func _on_start() -> void:

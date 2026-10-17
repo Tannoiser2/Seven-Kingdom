@@ -5,7 +5,7 @@ extends RefCounted
 const TEXT := """[b]SEVEN KINGDOM[/b] — un gioco di Stefano & Simone Ancillai. Da 2 a 4 casati si contendono i sette regni piazzando villaggi e manovrando i sei personaggi che governano politica, economia e religione. Zero fortuna (salvo la regola opzionale del dado): vince chi sceglie la mossa giusta al momento giusto.
 
 [b]LA MAPPA[/b]
-Sette tessere esagonali sul mare: la Capitale (9 siti) e i regni Boschivo e Fluviale (7), Montano e Autunnale (6), Collinare e Palustre (5). I regni collegati da un [b]ponte[/b] sono adiacenti (11 ponti). Quattro [b]porti[/b], a coppie (I: Alba–Vespro, II: Rupe–Bruma), collegano due regni via mare: valgono [i]solo per il movimento[/i], mai per gli effetti delle azioni. La Cavalleria non usa i porti.
+Sette tessere esagonali sul mare: la Capitale (9 siti) e i regni Boschivo e Fluviale (7), Montano e Autunnale (6), Collinare e Palustre (5). I regni collegati da un [b]ponte[/b] sono adiacenti (11 ponti; meno solo nelle mappe dove i regni si toccano in meno punti). Quattro [b]porti[/b], a coppie (I: Alba–Vespro, II: Rupe–Bruma), collegano due regni via mare: valgono [i]solo per il movimento[/i], mai per gli effetti delle azioni. La Cavalleria non usa i porti.
 Ogni regno ha una traccia di [b]siti[/b] numerati: il sito 1, con la corona, è quello del [b]Governatore[/b], che decide le parità di maggioranza. Ha poi la traccia della [b]Ricchezza[/b] (1–5) e la [b]Cattedrale[/b] per un Vescovo.
 Le mappe si scelgono nel menu (Il Regno dei Sette è quella del gioco originale) e se ne possono inventare di nuove con l'editor.
 

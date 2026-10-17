@@ -58,6 +58,14 @@ func _run() -> void:
 		await shot("rules")
 		quit()
 		return
+	if mode == "mappe":
+		for sc in SKData.SCENARIOS:
+			main.start_game({"players": [{"name": "A", "ai": false, "level": 1}, {"name": "B", "ai": true, "level": 1}], "colors": [0, 1], "seed": 5, "ai_delay": 0.0, "opts": {},
+				"scenario": sc, "map3d": m3, "pieces3d": p3})
+			await wait(30)
+			await shot("mappa_" + sc["id"])
+		quit()
+		return
 	if mode == "editor":
 		main.show_editor()
 		await wait(5)

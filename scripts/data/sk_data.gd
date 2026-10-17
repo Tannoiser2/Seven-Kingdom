@@ -168,6 +168,34 @@ const SCENARIOS := [
 		"ports": [{"id": "rupe", "pos": 3, "edge": 1}, {"id": "bruma", "pos": 2, "edge": 4}, {"id": "alba", "pos": 0, "edge": 0}, {"id": "vespro", "pos": 6, "edge": 2}],
 		"start": {"re": "capitale", "papa": "capitale", "spia": "collinare", "mercante": "fluviale", "fanteria": "palustre", "cavalleria": "montano"},
 	},
+	{
+		"id": "diagonale", "n": "La Diagonale", "desc": "I regni corrono in diagonale da nord-ovest a sud-est, con la Capitale nel cuore della striscia: chi la controlla tiene insieme il regno. I porti tagliano il mare da un capo all'altro.",
+		"tiles": {5: "capitale", 4: "boschivo", 1: "fluviale", 8: "montano", 9: "autunnale", 0: "collinare", 6: "palustre"},
+		"bridges": [[0, 1], [0, 4], [1, 4], [1, 5], [4, 5], [4, 8], [5, 6], [5, 8], [5, 9], [6, 9], [8, 9]],
+		"ports": [{"id": "alba", "pos": 0, "edge": 0}, {"id": "vespro", "pos": 6, "edge": 3}, {"id": "rupe", "pos": 1, "edge": 4}, {"id": "bruma", "pos": 8, "edge": 1}],
+		"start": {"re": "capitale", "papa": "capitale", "spia": "fluviale", "mercante": "autunnale", "fanteria": "montano", "cavalleria": "palustre"},
+	},
+	{
+		"id": "golfo", "n": "Il Golfo del Nord", "desc": "Il mare entra da nord in un ampio golfo; la Capitale, a sud del golfo, tocca tutti e sei gli altri regni. Un ponte crollato separa il Montano dal Palustre.",
+		"tiles": {5: "capitale", 1: "montano", 2: "palustre", 4: "boschivo", 6: "collinare", 8: "fluviale", 9: "autunnale"},
+		"bridges": [[1, 4], [1, 5], [2, 5], [2, 6], [4, 5], [4, 8], [5, 6], [5, 8], [5, 9], [6, 9], [8, 9]],
+		"ports": [{"id": "alba", "pos": 1, "edge": 5}, {"id": "vespro", "pos": 9, "edge": 2}, {"id": "rupe", "pos": 2, "edge": 3}, {"id": "bruma", "pos": 8, "edge": 1}],
+		"start": {"re": "capitale", "papa": "capitale", "spia": "montano", "mercante": "autunnale", "fanteria": "boschivo", "cavalleria": "palustre"},
+	},
+	{
+		"id": "arcipelago", "n": "L'Arcipelago", "desc": "Solo 8 ponti: il Collinare e il Palustre sono isole appese a un solo ponte, e i porti diventano vie preziose. La Capitale, al centro, è il crocevia di tutto.",
+		"tiles": {4: "capitale", 3: "boschivo", 5: "fluviale", 0: "montano", 7: "autunnale", 2: "collinare", 9: "palustre"},
+		"bridges": [[0, 3], [0, 4], [2, 5], [3, 4], [3, 7], [4, 5], [4, 7], [5, 9]],
+		"ports": [{"id": "alba", "pos": 2, "edge": 3}, {"id": "vespro", "pos": 9, "edge": 3}, {"id": "rupe", "pos": 0, "edge": 5}, {"id": "bruma", "pos": 7, "edge": 1}],
+		"start": {"re": "capitale", "papa": "capitale", "spia": "fluviale", "mercante": "collinare", "fanteria": "montano", "cavalleria": "autunnale"},
+	},
+	{
+		"id": "ferro", "n": "Il Ferro di Cavallo", "desc": "Sei regni a ferro di cavallo attorno a una baia, uniti da soli 6 ponti, con la Capitale in cima. Le due rotte dei porti chiudono il ferro a sud: senza il mare il cammino è lunghissimo.",
+		"tiles": {3: "capitale", 0: "boschivo", 7: "fluviale", 1: "montano", 8: "autunnale", 2: "palustre", 9: "collinare"},
+		"bridges": [[0, 1], [0, 3], [1, 2], [3, 7], [7, 8], [8, 9]],
+		"ports": [{"id": "alba", "pos": 2, "edge": 3}, {"id": "vespro", "pos": 9, "edge": 3}, {"id": "rupe", "pos": 1, "edge": 4}, {"id": "bruma", "pos": 8, "edge": 2}],
+		"start": {"re": "capitale", "papa": "capitale", "spia": "montano", "mercante": "autunnale", "fanteria": "boschivo", "cavalleria": "fluviale"},
+	},
 ]
 
 # ------------------------------------------------------------------ personaggi
@@ -297,6 +325,60 @@ static func scenario(id: String) -> Dictionary:
 
 
 ## Controlla uno scenario (anche fatto con l'editor). Restituisce l'elenco dei problemi (vuoto se va bene).
+const ROUTE_COLORS := {"alba": Color("#ffc94a"), "rupe": Color("#c58bff")}
+
+
+## Rotta via mare fra due porti che gira ATTORNO alle tessere: esce dal porto verso il largo, segue
+## il contorno (convesso, allargato di margin) della mappa dal lato più corto ed entra nell'altro porto.
+## a/b: punto sul lato della tessera; na/nb: direzione verso il mare; centers: centri delle tessere.
+## half/center: limiti del tabellone, per non uscire dal bordo.
+static func sea_route(a: Vector2, na: Vector2, b: Vector2, nb: Vector2, centers: Array, port_d: float, margin: float, half: Vector2, center: Vector2) -> Array:
+	var g := Vector2.ZERO
+	for c in centers:
+		g += c
+	g /= maxf(1.0, centers.size())
+	var pa := a + na * port_d
+	var pb := b + nb * port_d
+	var oa := a + na * (port_d + 0.35)
+	var ob := b + nb * (port_d + 0.35)
+	var ta := (oa - g).angle()
+	var tb := (ob - g).angle()
+	var d := wrapf(tb - ta, -PI, PI)
+	var pts := [pa, oa]
+	var n := maxi(6, int(absf(d) / 0.12))
+	for k in range(1, n):
+		var th := ta + d * k / n
+		var u := Vector2(cos(th), sin(th))
+		var h := -INF
+		for c in centers:
+			h = maxf(h, (c - g).dot(u))
+		var q := g + u * (h + margin)
+		q.x = clampf(q.x, center.x - half.x, center.x + half.x)
+		q.y = clampf(q.y, center.y - half.y, center.y + half.y)
+		pts.append(q)
+	pts.append(ob)
+	pts.append(pb)
+	# un po' di morbidezza: media mobile sui punti interni
+	var sm := [pts[0]]
+	for i in range(1, pts.size() - 1):
+		sm.append((pts[i - 1] + pts[i] * 2.0 + pts[i + 1]) / 4.0)
+	sm.append(pts[pts.size() - 1])
+	return sm
+
+
+## Ponti richiesti: 11, o tutti i lati in comune fra regni se la disposizione ne ha meno.
+static func bridges_needed(s: Dictionary) -> int:
+	var tiles := {}
+	for k in s.get("tiles", {}):
+		tiles[int(k)] = true
+	var pairs := 0
+	for a in tiles:
+		for b in tiles:
+			if a < b and edge_between(a, b) >= 0:
+				pairs += 1
+	return mini(11, pairs)
+
+
 static func validate_scenario(s: Dictionary) -> Array:
 	var errs := []
 	var tiles: Dictionary = {}
@@ -312,8 +394,9 @@ static func validate_scenario(s: Dictionary) -> Array:
 	if tiles.size() != 7:
 		errs.append("Servono 7 regni sul tabellone (ce ne sono %d)." % tiles.size())
 	var br: Array = s.get("bridges", [])
-	if br.size() != 11:
-		errs.append("Servono 11 ponti (ce ne sono %d)." % br.size())
+	var need := bridges_needed(s)
+	if br.size() != need:
+		errs.append("Servono %d ponti (ce ne sono %d)." % [need, br.size()] + ("" if need == 11 else " Con questa disposizione i regni si toccano solo in %d punti." % need))
 	var seen := {}
 	for b in br:
 		var a := int(b[0])

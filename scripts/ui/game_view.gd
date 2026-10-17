@@ -42,6 +42,7 @@ var house_boxes := {}
 var res_nodes := {}
 signal next_pressed
 var game_done := false
+var tutorial = null
 
 const LW := 300.0
 const RW := 480.0
@@ -100,6 +101,10 @@ func _ready() -> void:
 	modal.set_anchors_preset(Control.PRESET_FULL_RECT)
 	modal.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(modal)
+	if config.get("tutorial", false):
+		tutorial = preload("res://scripts/ui/tutorial.gd").new()
+		tutorial.gv = self
+		add_child(tutorial)
 	engine.changed.connect(_queue_refresh)
 	engine.log_added.connect(_on_log)
 	engine.decision_requested.connect(_on_decision)
@@ -115,6 +120,10 @@ func _start() -> void:
 	if online != null and not online.backlog.is_empty():
 		Audio.suspended = true
 		online_status("Riprendo la partita…")
+	if tutorial != null:
+		auto_next = false
+		_paint_auto()
+		await tutorial.intro()
 	await engine.run()
 
 
@@ -357,6 +366,11 @@ func _on_pause(kind: String, who: int, lines: Array, regs: Array) -> void:
 		pause_regs = []
 		return
 	btn_next.visible = true
+	if tutorial != null and await tutorial.on_pause(kind):
+		btn_next.visible = false
+		pause_regs = []
+		_apply_highlight()
+		return
 	if auto_next:
 		if engine.ai_delay > 0.01:
 			await get_tree().create_timer(maxf(1.0, engine.ai_delay * 1.6)).timeout
@@ -412,6 +426,8 @@ func refresh() -> void:
 	_refresh_left()
 	_refresh_cards()
 	_apply_highlight()
+	if tutorial != null and not pending.is_empty():
+		tutorial.on_step(step)
 
 
 func _refresh_left() -> void:
@@ -680,6 +696,8 @@ func _play_events() -> void:
 		return
 	var sounds := {}
 	var flights := []
+	if tutorial != null:
+		tutorial.on_events(st.events.slice(_ev_seen))
 	var anim: bool = not (online != null and online.catchup) and _ev_seen > 0
 	for e in st.events.slice(_ev_seen):
 		if anim and e["k"] == "res":
@@ -932,12 +950,15 @@ func _on_decision(req: Dictionary) -> void:
 				opts.append(engine.pname(q) + (" (tu)" if q == p else ""))
 			_choice_modal("La Corona", "Hai la maggioranza nel regno del Re: a chi dai la Corona? Chi la riceve diventa Primo Giocatore.", opts, func(i): _provide(i))
 		"battle_favor":
-			_choice_modal("Battaglia in %s" % engine.st.rname(req["r"]), "Vuoi spendere il tuo Favore Papale per avere +1 in battaglia?", ["Sì, spendo il Favore", "No, lo tengo"], func(i): _provide(i == 0))
+			_choice_modal("Battaglia in %s" % engine.st.rname(req["r"]), "Vuoi spendere il tuo Favore Papale per avere +1 in battaglia?", ["Sì, spendo il Favore", "No, lo tengo"], func(i): _provide(i == 0),
+				_battle_panel(engine.st, p, int(req["r"]), "favor"))
 		"battle_gov":
 			_choice_modal("Battaglia in %s" % engine.st.rname(req["r"]), "%s dà battaglia agli invasori. Come Governatore puoi aggiungere +1 al suo attacco. Se vince, diventerà lui il Governatore." % engine.pname(req["p"]),
-				["Sì, lo aiuto", "No"], func(i): _provide(i == 0))
+				["Sì, lo aiuto", "No"], func(i): _provide(i == 0), _battle_panel(engine.st, int(req["p"]), int(req["r"]), "gov"))
 	refresh()
 	_build_prompt()
+	if tutorial != null:
+		tutorial.on_decision(req)
 
 
 func _provide(v) -> void:
@@ -950,6 +971,8 @@ func _provide(v) -> void:
 	modal.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	board.set_highlight([], [])
 	_build_prompt()
+	if tutorial != null:
+		tutorial.after_provide()
 	engine.provide_decision(v)
 
 
@@ -990,9 +1013,11 @@ func _close_modal() -> void:
 	modal.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
-func _choice_modal(title: String, text: String, options: Array, cb: Callable) -> void:
+func _choice_modal(title: String, text: String, options: Array, cb: Callable, extra: Control = null) -> void:
 	var vb := _modal_box(title)
 	vb.add_child(UI.wrap(text, 20, UI.INK, 540))
+	if extra != null:
+		vb.add_child(extra)
 	for i in options.size():
 		var b := UI.button(options[i], 540, 50, 18)
 		if i == 0:
@@ -1000,6 +1025,79 @@ func _choice_modal(title: String, text: String, options: Array, cb: Callable) ->
 		var ii = i
 		b.pressed.connect(func(): cb.call(ii))
 		vb.add_child(b)
+
+
+## I rapporti di forza di una battaglia: l'attacco voce per voce contro gli invasori e l'esito
+## per ogni scelta ancora aperta (Favore Papale, aiuto del Governatore).
+## stage: "declare" (prima della battaglia), "favor" (si chiede il Favore), "gov" (si chiede al Governatore).
+func _battle_panel(st: SKState, p: int, r: int, stage: String, opaque := false) -> Control:
+	var dice: bool = st.opts.get("dice", false)
+	var inv := st.count(r, SKState.INV)
+	var rows := []
+	var atk := 0
+	if stage == "gov":
+		atk = st.battle_atk
+		rows.append(["Attacco di %s finora" % st.pname(p), atk])
+	else:
+		if not dice:
+			var v := st.count(r, p)
+			atk += v
+			rows.append(["Villaggi di %s nel regno" % st.pname(p), v])
+			if st.first == p:
+				atk += 1
+				rows.append(["Corona", 1])
+		if st.chars["fanteria"] == r:
+			atk += 1
+			rows.append(["Fanteria nel regno", 1])
+	var g := st.governor(r)
+	var fav_open: bool = stage != "gov" and st.favor[p]
+	var gov_open: bool = g >= 0 and g != p
+	if g >= 0 and g == p and stage != "gov":
+		atk += 1
+		rows.append(["Governatore (è suo)", 1])
+	var t := "[b]Forze in campo[/b]\n"
+	for x in rows:
+		t += "• %s: [b]+%d[/b]\n" % [x[0], x[1]]
+	if dice:
+		t += "• Dado: [b]1–6[/b] (vince se dado + bonus supera gli invasori)\n"
+	if fav_open:
+		t += "• Favore Papale: [b]+1[/b] se lo spende\n"
+	if gov_open:
+		t += "• Governatore (%s): [b]+1[/b] se aiuta\n" % st.pname(g)
+	t += "[b]Invasori: %d[/b]\n\n[b]Esito[/b]\n" % inv
+	var combos := []
+	for f in ([true, false] if fav_open else [false]):
+		for h in ([true, false] if gov_open else [false]):
+			combos.append([f, h])
+	for cmb in combos:
+		var a: int = atk + (1 if cmb[0] else 0) + (1 if cmb[1] else 0)
+		var label := []
+		if fav_open:
+			label.append("con Favore" if cmb[0] else "senza Favore")
+		if gov_open:
+			label.append("Governatore aiuta" if cmb[1] else "Governatore no")
+		var head := (", ".join(label) + ": ") if not label.is_empty() else ""
+		if dice:
+			var wins := 0
+			for roll in range(1, 7):
+				if roll + a > inv:
+					wins += 1
+			var col := "#2e6b2e" if wins >= 4 else ("#8a5a00" if wins >= 2 else "#8b1a1a")
+			t += "• %s+%d → [color=%s][b]vittoria %d su 6[/b][/color] (%d%%)\n" % [head, a, col, wins, roundi(wins * 100.0 / 6.0)]
+		else:
+			var win := a >= inv
+			t += "• %s%d contro %d → [color=%s][b]%s[/b][/color]\n" % [head, a, inv, "#2e6b2e" if win else "#8b1a1a", "VITTORIA" if win else "sconfitta"]
+	if not dice:
+		t += "[i]Senza dado si vince se l'attacco è almeno pari agli invasori.[/i]"
+	var rt := UI.rich(17, UI.INK)
+	rt.custom_minimum_size = Vector2(540, 0)
+	rt.append_text(t)
+	var pc := PanelContainer.new()
+	pc.add_theme_stylebox_override("panel", UI.parchment(12) if opaque else UI.flat(Color(1, 1, 1, 0.35), Color("#8a6a3a"), 1, 8, 12))
+	if opaque:
+		rt.custom_minimum_size = Vector2(RW - 70, 0)
+	pc.add_child(rt)
+	return pc
 
 
 func _objective_modal(req: Dictionary) -> void:
@@ -1057,6 +1155,9 @@ func _pick_char(c: String, pw := false) -> void:
 		_show_card(c)
 		return
 	if pw and not st.favor[_me()]:
+		return
+	if tutorial != null and not tutorial.allowed(c):
+		toast("Per ora scegli %s: lo dice la pergamena del tutorial." % SKData.CHAR_NAME[tutorial.lock_char])
 		return
 	sel = {"c": c, "pw": pw}
 	step = "dest"
@@ -1481,6 +1582,9 @@ func _build_prompt() -> void:
 		hl.custom_minimum_size = Vector2(W, 0)
 		hl.append_text(hint)
 		prompt_box.add_child(hl)
+	if step == "confirm" and c in ["fanteria", "cavalleria"] and st.regions[_dest()]["war"]:
+		var bs: SKState = board.preview if board.preview != null else st
+		prompt_box.add_child(_battle_panel(bs, me, _dest(), "declare", true))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	if sel.has("path"):
@@ -1570,6 +1674,8 @@ func _on_game_end(results: Array) -> void:
 		online.finish()
 	Audio.play("win")
 	await get_tree().create_timer(1.0).timeout
+	if tutorial != null:
+		await tutorial.on_end()
 	var st: SKState = engine.st
 	var vb := _modal_box("Fine della partita", 900)
 	vb.add_child(UI.wrap(SKState.END_TEXT.get(st.end_reason, ""), 20, UI.INK2, 840, UI.font_italic))

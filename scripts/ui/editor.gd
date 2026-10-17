@@ -110,7 +110,7 @@ func _build_side() -> void:
 				fl.add_child(b)
 			side.add_child(fl)
 		"bridge":
-			side.add_child(UI.wrap("Tocca il lato fra due regni vicini per mettere o togliere un ponte. Servono 11 ponti (ora %d)." % scen["bridges"].size(), 17, UI.INK2, 470))
+			side.add_child(UI.wrap("Tocca il lato fra due regni vicini per mettere o togliere un ponte. Servono %d ponti (ora %d)." % [SKData.bridges_needed(scen), scen["bridges"].size()], 17, UI.INK2, 470))
 		"port":
 			side.add_child(UI.wrap("Scegli un porto e tocca un lato di un regno rivolto verso il mare aperto. Le coppie I (Alba–Vespro) e II (Rupe–Bruma) sono collegate via mare.", 17, UI.INK2, 470))
 			var fl2 := HFlowContainer.new()

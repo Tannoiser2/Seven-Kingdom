@@ -13,8 +13,14 @@ azione passiva, e alla fine del turno gli invasori dilagano nei regni rimasti se
   5/3/1 punti per tipo. Il Mercato non c'è più.
 - **Carte obiettivo** (le 27 illustrate, con i regni indicati per nome) e **guerra con dado**, entrambe opzionali.
 - **Mappe**: *Il Regno dei Sette* (la mappa del gioco originale, 11 ponti e 4 porti), *La Corona di Regni*,
-  *Le Terre di Ponente*, più l'**editor delle mappe** per inventarne di nuove (si salvano sul dispositivo e si
-  condividono con un codice `SK1:…`).
+  *Le Terre di Ponente*, *La Diagonale*, *Il Golfo del Nord*, *L'Arcipelago* (8 ponti) e *Il Ferro di Cavallo*
+  (6 ponti), più l'**editor delle mappe** per inventarne di nuove (si salvano sul dispositivo e si condividono con
+  un codice `SK1:…`). Servono 11 ponti, o meno quando la disposizione non ha abbastanza lati in comune.
+  Le rotte dei porti girano attorno alle tessere, in oro (Alba–Vespro) e in viola (Rupe–Bruma).
+- **Tutorial**: una partita di prova guidata contro due IA facili che spiega mappa, piazzamento, i sei personaggi
+  (la prima volta la scelta è guidata), azioni passive, fine turno, guerre, pace, battaglie e punteggio.
+- **Battaglie chiare**: prima di decidere se spendere il Favore Papale o aiutare come Governatore, un riquadro
+  mostra le forze in campo voce per voce e l'esito (o le probabilità col dado) per ogni scelta.
 - **Mappa 3D** (tessere in rilievo ricavato dai dipinti, mare animato, telecamera libera) o **2D** dall'alto;
   **pedine 3D** (miniature dei personaggi, villaggi, vescovi, palazzi dei Governatori e risorse generati con Meshy,
   ricolorati per ogni casato; ponti, Ricchezza, influenza religiosa e accampamenti in 3D) o **2D** (i segnalini

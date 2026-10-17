@@ -21,9 +21,9 @@ func _ready() -> void:
 
 
 func _layout() -> void:
-	# la griglia è larga 5 raggi e alta 4 √3 raggi
-	R = minf(size.x / 5.4, size.y / (4.0 * sqrt(3.0) + 0.4))
-	origin = size / 2.0
+	# si vede tutto il tabellone del mare (col titolo in alto), centrato
+	R = minf(size.x / (7.71 * 1.16), size.y / (7.99 * 1.16))
+	origin = size / 2.0 + Vector2(0, (0.244 + 0.42) * R)
 
 
 func hex_center(pos: int) -> Vector2:
@@ -48,9 +48,9 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color("#174d5c"), true)
 	var sea := UI.tex("res://assets/board/mare.webp")
 	if sea != null:
-		var bw := R * 7.71
-		var bh := R * 7.99
-		draw_texture_rect(sea, Rect2(origin + Vector2(-bw / 2.0, -bh / 2.0 - 0.244 * R), Vector2(bw, bh)), false)
+		var bw := R * 7.71 * 1.16
+		var bh := R * 7.99 * 1.16
+		draw_texture_rect(sea, Rect2(origin + Vector2(-bw / 2.0, -bh / 2.0 - (0.244 + 0.42) * R), Vector2(bw, bh)), false)
 	for p in 10:
 		var c := hex_center(p)
 		if tiles.has(p):
@@ -87,6 +87,7 @@ func _draw() -> void:
 		draw_polyline(poly + PackedVector2Array([poly[0]]), Color("#5a4a36"), 1.5)
 	# porti e rotte
 	var pp := {}
+	var pn := {}
 	for pt in scen.get("ports", []):
 		var c3 := hex_center(int(pt["pos"]))
 		var em := SKData.edge_mid(int(pt["edge"]))
@@ -95,19 +96,49 @@ func _draw() -> void:
 		var d := w * 292.0 / 420.0
 		var ctr := c3 + em * R * 0.955 + outward * d / 2.0
 		pp[pt["id"]] = ctr + outward * d / 2.0
+		pn[pt["id"]] = [SKData.pos_center(int(pt["pos"])) + em * 0.955, outward]
 		var tex := UI.tex("res://assets/tokens/porto_%s.webp" % pt["id"])
 		if tex != null:
 			draw_set_transform(ctr, atan2(outward.y, outward.x) - PI / 2.0, Vector2.ONE)
 			draw_texture_rect(tex, Rect2(-w / 2.0, -d / 2.0, w, d), false)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var centers := []
+	for p2 in tiles:
+		centers.append(SKData.pos_center(p2))
+	var k := 0
 	for pr in [["alba", "vespro"], ["rupe", "bruma"]]:
-		if pp.has(pr[0]) and pp.has(pr[1]):
-			var col2 := Color("#f3d58c") if pr[0] == "alba" else Color("#d6b8f0")
-			_dashes(pp[pr[0]], pp[pr[1]], col2)
+		if pn.has(pr[0]) and pn.has(pr[1]):
+			var pts := SKData.sea_route(pn[pr[0]][0], pn[pr[0]][1], pn[pr[1]][0], pn[pr[1]][1], centers, 0.68 * 292.0 / 420.0, 1.35 + 0.3 * k, Vector2(7.71 * 1.16 / 2.0 - 0.2, 7.99 * 1.16 / 2.0 - 0.2), Vector2(0, -0.244 - 0.42))
+			var scr := PackedVector2Array()
+			for q in pts:
+				scr.append(origin + q * R)
+			_dash_line(scr, SKData.ROUTE_COLORS[pr[0]])
+			k += 1
 	if hl_edge[0] >= 0:
 		var c4 := hex_center(hl_edge[0])
 		var em2 := SKData.edge_mid(hl_edge[1])
 		draw_circle(c4 + em2 * R, R * 0.12, Color(1, 0.85, 0.3, 0.8))
+
+
+func _dash_line(pts: PackedVector2Array, col: Color) -> void:
+	var dash := R * 0.16
+	var gap := R * 0.1
+	var acc := 0.0
+	var on := true
+	for i in range(1, pts.size()):
+		var a := pts[i - 1]
+		var b := pts[i]
+		var L := a.distance_to(b)
+		var t := 0.0
+		while t < L:
+			var stepl := minf((dash if on else gap) - acc, L - t)
+			if on and stepl > 0.01:
+				draw_line(a.lerp(b, t / L), a.lerp(b, (t + stepl) / L), col, maxf(2.0, R * 0.05))
+			t += stepl
+			acc += stepl
+			if acc >= (dash if on else gap) - 0.001:
+				acc = 0.0
+				on = not on
 
 
 func _dashes(a: Vector2, b: Vector2, col: Color) -> void:

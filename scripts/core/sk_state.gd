@@ -906,6 +906,10 @@ func passive_phase(ch) -> void:
 	battles.clear()
 
 
+## Attacco già calcolato quando si chiede l'aiuto al Governatore (solo per l'interfaccia).
+var battle_atk := 0
+
+
 func _battle(ch, p: int, r: int, army: String) -> void:
 	var rg: Dictionary = regions[r]
 	if not rg["war"]:
@@ -933,6 +937,7 @@ func _battle(ch, p: int, r: int, army: String) -> void:
 	if g >= 0:
 		var help = true
 		if g != p:
+			battle_atk = atk
 			help = await ch.battle_gov(g, p, r)
 		if help:
 			atk += 1
