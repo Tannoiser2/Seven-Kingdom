@@ -70,6 +70,28 @@ func _run() -> void:
 		"scenario": SKData.scenario(args[4] if args.size() > 4 else "base"), "map3d": m3, "pieces3d": p3})
 	await wait(20)
 	gv().auto_next = true
+	if mode == "fx":
+		auto_answer()
+		var t2 := Time.get_ticks_msec()
+		while gv().engine.st.turn < 1 and Time.get_ticks_msec() - t2 < 120000:
+			await wait(2)
+			auto_answer()
+		var g2 = gv()
+		var s2: SKState = g2.engine.st
+		s2.regions[0]["war"] = true
+		s2.regions[2]["peace"] = true
+		s2.regions[3]["infl"] = 2
+		g2.refresh()
+		await wait(60)
+		await shot("fx_tutto")
+		for r in [0, 2, 3]:
+			g2.board.zoom(0.4)
+			g2.board.target = g2.board.region_center[r]
+			g2.board._update_cam()
+			await wait(40)
+			await shot("fx_%d" % r)
+		quit()
+		return
 	await shot("obiettivo")
 	auto_answer()
 	await wait(10)

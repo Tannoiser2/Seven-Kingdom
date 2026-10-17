@@ -26,6 +26,10 @@ var env: WorldEnvironment
 var root_tiles: Node3D
 var root_pieces: Node3D
 var root_hl: Node3D
+var root_fx: Node3D
+var fx_state := {}
+var fx_nodes := {}
+var doves: Array = []
 var board_mat: ShaderMaterial
 var tile_mats := {}
 var tile_nodes := {}
@@ -89,6 +93,8 @@ func _ready() -> void:
 	add_child(root_tiles)
 	root_hl = Node3D.new()
 	add_child(root_hl)
+	root_fx = Node3D.new()
+	add_child(root_fx)
 	root_pieces = Node3D.new()
 	add_child(root_pieces)
 	build_map()
@@ -105,6 +111,7 @@ func set_modes(p_map3d: bool, p_pieces3d: bool) -> void:
 		nodes[k].queue_free()
 	nodes.clear()
 	vals.clear()
+	_clear_fx()
 	refresh(false)
 	_update_cam()
 
@@ -544,6 +551,29 @@ func _tint(n: Node, p: int) -> void:
 				m.set_surface_override_material(s, sm)
 
 
+## Rende bianco tutto il modello (il Vescovo dell'influenza religiosa).
+func _whiten(n: Node) -> void:
+	for mi in _meshes(n):
+		var m: MeshInstance3D = mi
+		for s in m.mesh.get_surface_count():
+			var sm = m.get_surface_override_material(s)
+			if sm is ShaderMaterial:
+				sm.set_shader_parameter("white", 1.0)
+
+
+func _tint_hsv(n: Node, hsv: Vector3) -> void:
+	for mi in _meshes(n):
+		var m: MeshInstance3D = mi
+		for s in m.mesh.get_surface_count():
+			var src = m.get_active_material(s)
+			if src is BaseMaterial3D:
+				var sm := ShaderMaterial.new()
+				sm.shader = tint_shader
+				sm.set_shader_parameter("tex", src.albedo_texture)
+				sm.set_shader_parameter("hsv", hsv)
+				m.set_surface_override_material(s, sm)
+
+
 ## Annerisce un modello (insediamenti degli invasori).
 func _tint_dark(n: Node) -> void:
 	for mi in _meshes(n):
@@ -639,25 +669,25 @@ func _coin() -> Node3D:
 	var n := Node3D.new()
 	var cy := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
-	cm.top_radius = 0.045
-	cm.bottom_radius = 0.045
-	cm.height = 0.022
+	cm.top_radius = 0.062
+	cm.bottom_radius = 0.062
+	cm.height = 0.026
 	cm.radial_segments = 32
 	cy.mesh = cm
 	cy.material_override = _mat(Color("#d9a92e"), 0.3, 1.0)
-	cy.position.y = 0.011
+	cy.position.y = 0.013
 	n.add_child(cy)
 	var rim := MeshInstance3D.new()
 	var tm := TorusMesh.new()
-	tm.inner_radius = 0.037
-	tm.outer_radius = 0.046
+	tm.inner_radius = 0.051
+	tm.outer_radius = 0.063
 	rim.mesh = tm
 	rim.material_override = _mat(Color("#f2c84e"), 0.25, 1.0)
-	rim.position.y = 0.022
+	rim.position.y = 0.026
 	n.add_child(rim)
 	var face := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
-	pm.size = Vector2(0.074, 0.074)
+	pm.size = Vector2(0.102, 0.102)
 	face.mesh = pm
 	var fm := StandardMaterial3D.new()
 	fm.albedo_texture = UI.tex("res://assets/tokens/ricchezza.webp")
@@ -665,46 +695,29 @@ func _coin() -> Node3D:
 	fm.metallic = 0.6
 	fm.roughness = 0.35
 	face.material_override = fm
-	face.position.y = 0.0225
+	face.position.y = 0.0265
 	n.add_child(face)
 	return n
 
 
-## Influenza religiosa: una piccola mitria bianca e oro su una base rotonda.
+## Influenza religiosa: la miniatura del Vescovo, tutta bianca, su una base rotonda dorata.
 func _mitre() -> Node3D:
 	var n := Node3D.new()
-	var white := _mat(Color("#f4efe2"), 0.6)
-	var gold := _mat(Color("#d9a92e"), 0.3, 1.0)
 	var base := MeshInstance3D.new()
 	var bm := CylinderMesh.new()
-	bm.top_radius = 0.04
-	bm.bottom_radius = 0.042
-	bm.height = 0.012
+	bm.top_radius = 0.056
+	bm.bottom_radius = 0.06
+	bm.height = 0.014
+	bm.radial_segments = 32
 	base.mesh = bm
-	base.material_override = gold
-	base.position.y = 0.006
+	base.material_override = _mat(Color("#d9a92e"), 0.3, 1.0)
+	base.position.y = 0.007
 	n.add_child(base)
-	var body := MeshInstance3D.new()
-	var pm := PrismMesh.new()
-	pm.size = Vector3(0.05, 0.075, 0.028)
-	body.mesh = pm
-	body.material_override = white
-	body.position.y = 0.012 + 0.0375
-	n.add_child(body)
-	var band := MeshInstance3D.new()
-	var bx := BoxMesh.new()
-	bx.size = Vector3(0.008, 0.06, 0.03)
-	band.mesh = bx
-	band.material_override = gold
-	band.position.y = 0.012 + 0.03
-	n.add_child(band)
-	var cross := MeshInstance3D.new()
-	var cb := BoxMesh.new()
-	cb.size = Vector3(0.022, 0.006, 0.031)
-	cross.mesh = cb
-	cross.material_override = gold
-	cross.position.y = 0.012 + 0.03
-	n.add_child(cross)
+	var b := _fit(_model("vescovo"), 0.17)
+	_tint_hsv(b, Vector3(0.1, 0.05, 1.9))
+	_whiten(b)
+	b.position.y = 0.014
+	n.add_child(b)
 	return n
 
 
@@ -948,7 +961,7 @@ func _make(kind: String, v) -> Node3D:
 				top.material_override = _mat(Color("#efe2bf"), 0.85)
 				top.position.y = 0.016
 				hold.add_child(top)
-				var rs := _fit(_model("res_" + v), 0.0, 0.13, true, "res_" + v)
+				var rs := _fit(_model("res_" + v), 0.0, 0.18 if v == "oro" else 0.145, true, "res_" + v)
 				rs.position.y = 0.018
 				hold.add_child(rs)
 				return hold
@@ -956,18 +969,18 @@ func _make(kind: String, v) -> Node3D:
 		"econ":
 			if pieces3d:
 				return _coin()
-			return _disc("res://assets/tokens/ricchezza.webp", 0.085, 0.0, Color("#b8892e"))
+			return _disc("res://assets/tokens/ricchezza.webp", 0.12, 0.0, Color("#b8892e"))
 		"infl":
 			if pieces3d:
 				return _mitre()
-			return _disc("res://assets/tokens/influenza.webp", 0.085, 0.0, Color("#e9e2cf"))
+			return _disc("res://assets/tokens/influenza.webp", 0.12, 0.0, Color("#e9e2cf"))
 		"bishop":
 			var p2: int = v
 			if pieces3d:
-				var mb := _fit(_model("vescovo"), 0.19)
+				var mb := _fit(_model("vescovo"), 0.26)
 				_tint(mb, p2)
 				return mb
-			return _sprite("res://assets/tokens/vescovo_%s.webp" % UI.cid(p2), 0.12, map3d)
+			return _sprite("res://assets/tokens/vescovo_%s.webp" % UI.cid(p2), 0.16, map3d)
 		"war":
 			return _disc("res://assets/tokens/guerra.webp", 0.2, 0.016 if pieces3d else 0.0, Color("#7a1a1a"))
 		"peace":
@@ -1078,18 +1091,444 @@ func refresh(animate := true) -> void:
 		want[key] = true
 		var pos := tile_point(r, sp.x, sp.y)
 		if nodes.has(key) and vals.get(key, "") == c and animate and nodes[key].position.distance_to(pos) > 0.01:
-			var n: Node3D = nodes[key]
-			var tw := n.create_tween()
-			var mid := (n.position + pos) / 2.0 + Vector3(0, 0.6, 0)
-			tw.tween_property(n, "position", mid, 0.28).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-			tw.tween_property(n, "position", pos, 0.28).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+			_walk(nodes[key], c, r, pos, st)
 		else:
 			_place(key, "char", c, pos, animate)
 	for k in nodes.keys():
 		if not want.has(k):
 			_remove(k, animate)
 	_rebuild_frames(st)
+	_rebuild_fx(st)
 	_rebuild_hl()
+
+
+## Il personaggio cammina da un regno all'altro lungo il percorso della mossa: a piccoli passi sui ponti,
+## con un balzo ad arco quando attraversa il mare (porti).
+func _walk(n: Node3D, c: String, dest: int, pos: Vector3, st: SKState) -> void:
+	var path: Array = []
+	for k in range(st.events.size() - 1, -1, -1):
+		var e: Dictionary = st.events[k]
+		if e["k"] == "move" and e["c"] == c:
+			path = e["path"]
+			break
+	var pts: Array = [n.position]
+	var sea: Array = []
+	if path.size() >= 2 and int(path[path.size() - 1]) == dest:
+		for k in range(1, path.size()):
+			var a := int(path[k - 1])
+			var b := int(path[k])
+			var by_sea: bool = not st.land[a].has(b)
+			if k < path.size() - 1:
+				pts.append(region_center[b])
+			else:
+				pts.append(pos)
+			sea.append(by_sea)
+	else:
+		pts.append(pos)
+		sea.append(false)
+	if n.has_meta("walk"):
+		var old: Tween = n.get_meta("walk")
+		if old != null and old.is_valid():
+			old.kill()
+	var tw := n.create_tween()
+	n.set_meta("walk", tw)
+	for k in range(1, pts.size()):
+		var a3: Vector3 = pts[k - 1]
+		var b3: Vector3 = pts[k]
+		var dist := a3.distance_to(b3)
+		var by_sea2: bool = sea[k - 1]
+		var dur := clampf(dist * 0.55, 0.35, 0.9) + (0.25 if by_sea2 else 0.0)
+		var steps := maxi(2, int(dist / 0.12))
+		tw.tween_method(func(t: float):
+			var q := a3.lerp(b3, t)
+			if by_sea2:
+				q.y += sin(t * PI) * 0.7
+			else:
+				q.y += absf(sin(t * PI * steps)) * 0.045
+				n.rotation.z = sin(t * PI * steps) * 0.08
+			n.position = q, 0.0, 1.0, dur)
+	tw.tween_callback(func(): n.rotation.z = 0.0)
+
+
+# ------------------------------------------------------------------ effetti di guerra e di pace
+## Regni in guerra: villaggi in fiamme, fumo e due spade incrociate sospese sopra il regno.
+## Regni pacificati: colombe bianche che volano in cerchio e un sole che splende sopra i villaggi.
+func _rebuild_fx(st: SKState) -> void:
+	for r in st.regions.size():
+		var rg: Dictionary = st.regions[r]
+		var kind := "war" if rg["war"] else ("peace" if rg["peace"] else "")
+		var sig := kind
+		if kind == "war":
+			sig += str(rg["sites"])
+		if fx_state.get(r, "") == sig:
+			continue
+		fx_state[r] = sig
+		if fx_nodes.has(r) and is_instance_valid(fx_nodes[r]):
+			doves = doves.filter(func(d): return is_instance_valid(d) and not fx_nodes[r].is_ancestor_of(d))
+			fx_nodes[r].queue_free()
+		fx_nodes.erase(r)
+		if kind == "":
+			continue
+		var holder := Node3D.new()
+		root_fx.add_child(holder)
+		fx_nodes[r] = holder
+		if kind == "war":
+			# fiamme sui siti più alti occupati (dove arrivano gli invasori)
+			var burning := 0
+			for i in range(rg["sites"].size() - 1, -1, -1):
+				if rg["sites"][i] != -1 and burning < 3:
+					holder.add_child(_fire(site_pos(r, i)))
+					burning += 1
+			var sw := _swords(region_center[r] + Vector3(0, 0.75, 0))
+			sw.scale = Vector3.ONE * 1.9
+			holder.add_child(sw)
+			holder.add_child(_border_fx(r, true))
+		else:
+			var sun := _sun(region_center[r] + Vector3(0.25, 0.85, -0.22))
+			sun.scale = Vector3.ONE * 2.2
+			holder.add_child(sun)
+			holder.add_child(_border_fx(r, false))
+			for k in 3:
+				var dv := _dove()
+				dv.set_meta("c", region_center[r])
+				dv.set_meta("rad", 0.28 + 0.1 * k)
+				dv.set_meta("sp", (0.9 + 0.25 * k) * (1.0 if k % 2 == 0 else -1.0))
+				dv.set_meta("ph", k * 2.1)
+				holder.add_child(dv)
+				doves.append(dv)
+
+
+func _clear_fx() -> void:
+	for r in fx_nodes:
+		if is_instance_valid(fx_nodes[r]):
+			fx_nodes[r].queue_free()
+	fx_nodes.clear()
+	fx_state.clear()
+	doves.clear()
+
+
+func _particle_mat(col: Color, additive: bool) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	if additive:
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.vertex_color_use_as_albedo = true
+	m.albedo_color = col
+	m.albedo_texture = _soft_dot()
+	return m
+
+
+var _dot_tex: Texture2D = null
+
+func _soft_dot() -> Texture2D:
+	if _dot_tex != null:
+		return _dot_tex
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.0, 0.5)
+	gt.width = 64
+	gt.height = 64
+	_dot_tex = gt
+	return gt
+
+
+func _fire(at: Vector3) -> Node3D:
+	var n := Node3D.new()
+	n.position = at
+	var f := CPUParticles3D.new()
+	f.amount = 40
+	f.lifetime = 0.7
+	f.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	f.emission_sphere_radius = 0.05
+	f.direction = Vector3.UP
+	f.spread = 15.0
+	f.gravity = Vector3(0, 0.35, 0)
+	f.initial_velocity_min = 0.1
+	f.initial_velocity_max = 0.22
+	f.scale_amount_min = 0.6
+	f.scale_amount_max = 1.0
+	var sc := Curve.new()
+	sc.add_point(Vector2(0, 1.0))
+	sc.add_point(Vector2(1, 0.2))
+	f.scale_amount_curve = sc
+	var gr := Gradient.new()
+	gr.set_color(0, Color(1.0, 0.85, 0.3, 1.0))
+	gr.add_point(0.35, Color(1.0, 0.4, 0.05, 1.0))
+	gr.set_color(gr.get_point_count() - 1, Color(0.7, 0.08, 0.0, 0.0))
+	f.color_ramp = gr
+	var q := QuadMesh.new()
+	q.size = Vector2(0.2, 0.2)
+	q.material = _particle_mat(Color.WHITE, false)
+	f.mesh = q
+	f.position.y = 0.06
+	n.add_child(f)
+	var sm := CPUParticles3D.new()
+	sm.amount = 14
+	sm.lifetime = 2.2
+	sm.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	sm.emission_sphere_radius = 0.04
+	sm.direction = Vector3.UP
+	sm.spread = 20.0
+	sm.gravity = Vector3(0.04, 0.12, 0)
+	sm.initial_velocity_min = 0.06
+	sm.initial_velocity_max = 0.12
+	var sc2 := Curve.new()
+	sc2.add_point(Vector2(0, 0.4))
+	sc2.add_point(Vector2(1, 1.6))
+	sm.scale_amount_curve = sc2
+	var gr2 := Gradient.new()
+	gr2.set_color(0, Color(0.12, 0.1, 0.09, 0.0))
+	gr2.add_point(0.2, Color(0.15, 0.13, 0.12, 0.4))
+	gr2.set_color(gr2.get_point_count() - 1, Color(0.3, 0.28, 0.27, 0.0))
+	sm.color_ramp = gr2
+	var q2 := QuadMesh.new()
+	q2.size = Vector2(0.12, 0.12)
+	q2.material = _particle_mat(Color.WHITE, false)
+	sm.mesh = q2
+	sm.position.y = 0.2
+	n.add_child(sm)
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.55, 0.2)
+	l.light_energy = 0.8
+	l.omni_range = 0.4
+	l.position.y = 0.12
+	n.add_child(l)
+	var tw := l.create_tween().set_loops()
+	tw.tween_property(l, "light_energy", 1.3, 0.12)
+	tw.tween_property(l, "light_energy", 0.6, 0.17)
+	return n
+
+
+func _swords(at: Vector3) -> Node3D:
+	var n := Node3D.new()
+	n.position = at
+	var steel := _mat(Color("#d8dde3"), 0.25, 0.9)
+	var gold := _mat(Color("#d9a92e"), 0.3, 1.0)
+	var grip := _mat(Color("#5a2a1a"), 0.8)
+	for side in [-1.0, 1.0]:
+		var sw := Node3D.new()
+		sw.rotation.z = side * deg_to_rad(40.0)
+		var blade := MeshInstance3D.new()
+		var bm := PrismMesh.new()
+		bm.size = Vector3(0.035, 0.34, 0.008)
+		blade.mesh = bm
+		blade.material_override = steel
+		blade.position.y = 0.09
+		sw.add_child(blade)
+		var guard := MeshInstance3D.new()
+		var gm := BoxMesh.new()
+		gm.size = Vector3(0.11, 0.018, 0.02)
+		guard.mesh = gm
+		guard.material_override = gold
+		guard.position.y = -0.085
+		sw.add_child(guard)
+		var hilt := MeshInstance3D.new()
+		var hm := CylinderMesh.new()
+		hm.top_radius = 0.009
+		hm.bottom_radius = 0.009
+		hm.height = 0.07
+		hilt.mesh = hm
+		hilt.material_override = grip
+		hilt.position.y = -0.13
+		sw.add_child(hilt)
+		var pom := MeshInstance3D.new()
+		var pm := SphereMesh.new()
+		pm.radius = 0.016
+		pm.height = 0.032
+		pom.mesh = pm
+		pom.material_override = gold
+		pom.position.y = -0.17
+		sw.add_child(pom)
+		n.add_child(sw)
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.3, 0.2)
+	l.light_energy = 0.6
+	l.omni_range = 0.6
+	n.add_child(l)
+	var tw := n.create_tween().set_loops()
+	tw.tween_property(n, "position:y", at.y + 0.05, 0.9).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(n, "position:y", at.y, 0.9).set_trans(Tween.TRANS_SINE)
+	var tw2 := n.create_tween().set_loops()
+	tw2.tween_property(n, "rotation:y", TAU, 6.0).from(0.0)
+	return n
+
+
+## Bordo del regno vivo: un muro di fiamme basse in guerra, scintille dorate che salgono in pace.
+func _border_fx(r: int, war: bool) -> Node3D:
+	var c: Vector3 = region_center[r]
+	var pts := PackedVector3Array()
+	var rad := TILE_SCALE * 0.93
+	for k in 6:
+		var a0 := deg_to_rad(60.0 * k)
+		var a1 := deg_to_rad(60.0 * (k + 1))
+		for j in 10:
+			var t := j / 10.0
+			pts.append(Vector3(cos(a0), 0, sin(a0)).lerp(Vector3(cos(a1), 0, sin(a1)), t) * rad)
+	var p := CPUParticles3D.new()
+	p.position = Vector3(c.x, base_y() + (0.05 if map3d else 0.01), c.z)
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINTS
+	p.emission_points = pts
+	p.direction = Vector3.UP
+	p.spread = 10.0
+	var q := QuadMesh.new()
+	var gr := Gradient.new()
+	if war:
+		p.amount = 160
+		p.lifetime = 0.6
+		p.gravity = Vector3(0, 0.3, 0)
+		p.initial_velocity_min = 0.08
+		p.initial_velocity_max = 0.18
+		q.size = Vector2(0.11, 0.11)
+		gr.set_color(0, Color(1.0, 0.8, 0.25, 0.95))
+		gr.add_point(0.4, Color(1.0, 0.35, 0.05, 0.85))
+		gr.set_color(gr.get_point_count() - 1, Color(0.6, 0.05, 0.0, 0.0))
+	else:
+		p.amount = 120
+		p.lifetime = 2.0
+		p.gravity = Vector3(0, 0.05, 0)
+		p.initial_velocity_min = 0.06
+		p.initial_velocity_max = 0.14
+		q.size = Vector2(0.075, 0.075)
+		gr.set_color(0, Color(0.75, 0.95, 1.0, 0.0))
+		gr.add_point(0.25, Color(0.85, 0.97, 1.0, 1.0))
+		gr.set_color(gr.get_point_count() - 1, Color(0.6, 0.85, 1.0, 0.0))
+	p.color_ramp = gr
+	# su tessere chiare la fusione additiva sparisce: miscela normale
+	q.material = _particle_mat(Color.WHITE, false)
+	p.mesh = q
+	return p
+
+
+## Luce colorata che pulsa sopra tutto il regno (rossa in guerra, dorata in pace).
+func _glow(at: Vector3, col: Color) -> Node3D:
+	var l := OmniLight3D.new()
+	l.light_color = col
+	l.light_energy = 1.4
+	l.omni_range = 1.0
+	l.omni_attenuation = 0.6
+	l.position = at + Vector3(0, 0.45, 0)
+	var tw := l.create_tween().set_loops()
+	tw.tween_property(l, "light_energy", 2.2, 1.1).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(l, "light_energy", 1.1, 1.1).set_trans(Tween.TRANS_SINE)
+	return l
+
+
+func _sun(at: Vector3) -> Node3D:
+	var n := Node3D.new()
+	n.position = at
+	var core := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.05
+	sm.height = 0.1
+	core.mesh = sm
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = Color("#ffe58a")
+	core.material_override = m
+	n.add_child(core)
+	var halo := Sprite3D.new()
+	halo.texture = _soft_dot()
+	halo.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	halo.modulate = Color(1.0, 0.85, 0.4, 0.8)
+	halo.pixel_size = 0.3 / 64.0
+	halo.shaded = false
+	halo.transparent = true
+	n.add_child(halo)
+	# raggi: piccoli coni dorati che ruotano
+	var rays := Node3D.new()
+	var rm := StandardMaterial3D.new()
+	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.albedo_color = Color(1.0, 0.82, 0.35, 0.85)
+	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	for k in 10:
+		var ray := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.0
+		cm.bottom_radius = 0.013
+		cm.height = 0.065
+		ray.mesh = cm
+		ray.material_override = rm
+		var a := TAU * k / 10.0
+		ray.position = Vector3(cos(a), 0, sin(a)) * 0.085
+		ray.rotation = Vector3(0, -a, -PI / 2.0)
+		rays.add_child(ray)
+	n.add_child(rays)
+	var tw := rays.create_tween().set_loops()
+	tw.tween_property(rays, "rotation:y", TAU, 9.0).from(0.0)
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.9, 0.6)
+	l.light_energy = 1.2
+	l.omni_range = 1.1
+	n.add_child(l)
+	var tw2 := halo.create_tween().set_loops()
+	tw2.tween_property(halo, "pixel_size", 0.38 / 64.0, 1.4).set_trans(Tween.TRANS_SINE)
+	tw2.tween_property(halo, "pixel_size", 0.3 / 64.0, 1.4).set_trans(Tween.TRANS_SINE)
+	return n
+
+
+## Colomba: corpo bianco e due ali triangolari che battono (figli 1 e 2), testa e coda.
+func _dove() -> Node3D:
+	var n := Node3D.new()
+	n.scale = Vector3.ONE * 1.8
+	var w := _mat(Color("#fbfaf6"), 0.6)
+	w.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var body := MeshInstance3D.new()
+	var cm := CapsuleMesh.new()
+	cm.radius = 0.009
+	cm.height = 0.045
+	body.mesh = cm
+	body.material_override = w
+	body.rotation.x = PI / 2.0
+	n.add_child(body)
+	for side in [-1.0, 1.0]:
+		var pivot := Node3D.new()
+		var wing := MeshInstance3D.new()
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		st.set_normal(Vector3.UP)
+		st.add_vertex(Vector3(0, 0, -0.012))
+		st.add_vertex(Vector3(side * 0.055, 0, 0.006))
+		st.add_vertex(Vector3(0, 0, 0.012))
+		wing.mesh = st.commit()
+		wing.material_override = w
+		pivot.add_child(wing)
+		n.add_child(pivot)
+	var head := MeshInstance3D.new()
+	var hm := SphereMesh.new()
+	hm.radius = 0.008
+	hm.height = 0.016
+	head.mesh = hm
+	head.material_override = w
+	head.position = Vector3(0, 0.005, -0.026)
+	n.add_child(head)
+	var beak := MeshInstance3D.new()
+	var bm := CylinderMesh.new()
+	bm.top_radius = 0.0
+	bm.bottom_radius = 0.003
+	bm.height = 0.008
+	beak.mesh = bm
+	beak.material_override = _mat(Color("#e0a040"), 0.6)
+	beak.rotation.x = -PI / 2.0
+	beak.position = Vector3(0, 0.004, -0.036)
+	n.add_child(beak)
+	var tail := MeshInstance3D.new()
+	var st2 := SurfaceTool.new()
+	st2.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st2.set_normal(Vector3.UP)
+	st2.add_vertex(Vector3(0, 0, 0.015))
+	st2.add_vertex(Vector3(-0.014, 0, 0.04))
+	st2.add_vertex(Vector3(0.014, 0, 0.04))
+	tail.mesh = st2.commit()
+	tail.material_override = w
+	n.add_child(tail)
+	return n
 
 
 ## Cornice del colore di chi ha la maggioranza nel regno (nessuna se è contesa o vuota).
@@ -1246,6 +1685,18 @@ func _hex_ring(r: int, col: Color, w: float, lift := 0.03) -> Node3D:
 
 func _process(delta: float) -> void:
 	_t += delta
+	for d in doves:
+		if is_instance_valid(d):
+			var c: Vector3 = d.get_meta("c")
+			var rad: float = d.get_meta("rad")
+			var sp: float = d.get_meta("sp")
+			var ph: float = d.get_meta("ph")
+			var a := _t * sp + ph
+			d.position = c + Vector3(cos(a) * rad, 0.42 + 0.06 * sin(_t * 1.7 + ph), sin(a) * rad)
+			d.rotation.y = -a + (PI if sp > 0 else 0.0)
+			var flap := sin(_t * 14.0 + ph) * 0.7
+			d.get_child(1).rotation.z = flap
+			d.get_child(2).rotation.z = -flap
 	var pulse := 0.65 + 0.35 * sin(_t * 5.0)
 	for n in hl_nodes:
 		if is_instance_valid(n) and n is Node3D and n.get_child_count() > 0 and n.get_child(0) is MeshInstance3D:
@@ -1482,6 +1933,7 @@ shader_type spatial;
 uniform sampler2D tex : source_color, filter_linear_mipmap;
 uniform vec3 hsv = vec3(0.0, 1.0, 1.0);
 uniform float dark = 1.0;
+uniform float white = 0.0;
 vec3 rgb2hsv(vec3 c) {
 	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
 	vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
@@ -1505,6 +1957,11 @@ void fragment() {
 	if (dark < 1.0) {
 		float l = dot(o, vec3(0.3, 0.59, 0.11));
 		o = mix(vec3(l), o, 0.25) * dark;
+	}
+	if (white > 0.0) {
+		// porcellana: tutto bianco avorio, conserva solo un po' delle ombre dipinte
+		float l2 = dot(c, vec3(0.3, 0.59, 0.11));
+		o = mix(o, vec3(0.97, 0.95, 0.9) * (0.72 + 0.4 * l2), white);
 	}
 	ALBEDO = o;
 	ROUGHNESS = 0.75;

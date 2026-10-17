@@ -460,6 +460,12 @@ func _refresh_left() -> void:
 			var fv := UI.icon("res://assets/tokens/favore.webp", 32)
 			fv.tooltip_text = "Favore Papale: permette un'azione potenziata (+2 PV se lo tieni fino alla fine)"
 			hb.add_child(fv)
+		var sc := UI.label("%d PV" % st.score(p, false), 26, UI.GOLD, UI.font_title)
+		sc.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+		sc.add_theme_constant_override("outline_size", 4)
+		sc.tooltip_text = _score_tip(p)
+		sc.mouse_filter = Control.MOUSE_FILTER_PASS
+		hb.add_child(sc)
 		vb.add_child(hb)
 		var info := HBoxContainer.new()
 		info.add_theme_constant_override("separation", 10)
@@ -481,31 +487,42 @@ func _refresh_left() -> void:
 		bis.tooltip_text = "Vescovi ancora da nominare"
 		bis.mouse_filter = Control.MOUSE_FILTER_PASS
 		info.add_child(bis)
-		var sc := UI.label("%d PV" % st.score(p, false), 17, UI.GOLD, UI.font_bold)
-		sc.tooltip_text = _score_tip(p)
-		sc.mouse_filter = Control.MOUSE_FILTER_PASS
-		info.add_child(sc)
 		vb.add_child(info)
-		var rs := HBoxContainer.new()
-		rs.add_theme_constant_override("separation", 6)
+		# le risorse: una fila per tipo, tante icone quante ne ha, e il numero in fondo
+		var rs := VBoxContainer.new()
+		rs.add_theme_constant_override("separation", 0)
 		res_nodes[p] = {}
 		for t in SKData.RESOURCES:
 			var n_have: int = st.res[p][t]
 			var mine_pick := 0
 			if picking_res and int(sel.get("from", -1)) == p:
 				mine_pick = sel["res"].count(t)
-			var chip := UI.res_chip(t, n_have - mine_pick, 24)
+			var shown := n_have - mine_pick
 			var holder := PanelContainer.new()
-			var can: bool = picking_res and p != _me() and n_have - mine_pick > 0
-			holder.add_theme_stylebox_override("panel", UI.flat(Color(1, 0.85, 0.3, 0.22) if can else Color(0, 0, 0, 0), Color("#ffd86a") if can else Color(0, 0, 0, 0), 2 if can else 0, 6, 1))
-			holder.add_child(chip)
-			chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			for ch in chip.get_children():
-				if ch is Control:
-					ch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var can: bool = picking_res and p != _me() and shown > 0
+			holder.add_theme_stylebox_override("panel", UI.flat(Color(1, 0.85, 0.3, 0.22) if can else Color(0, 0, 0, 0), Color("#ffd86a") if can else Color(0, 0, 0, 0), 2 if can else 0, 5, 1))
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", -3)
+			row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			holder.add_child(row)
+			for k in maxi(1, shown):
+				var ic := UI.icon("res://assets/res/%s.webp" % t, 21)
+				ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				if shown == 0:
+					ic.modulate = Color(1, 1, 1, 0.22)
+				row.add_child(ic)
+			var gap := Control.new()
+			gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			row.add_child(gap)
+			var num := UI.label(str(shown), 17, UI.LIGHT if shown > 0 else UI.PARCH.darkened(0.4), UI.font_bold)
+			num.custom_minimum_size = Vector2(22, 0)
+			num.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			num.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			row.add_child(num)
+			holder.tooltip_text = SKData.RES_NAME[t] + (" — tocca per rubarne una" if can else "")
 			if can:
 				holder.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-				holder.tooltip_text = "Il Mercante prende 1 " + SKData.RES_NAME[t]
 			var tt: String = t
 			holder.gui_input.connect(func(ev):
 				if _is_click(ev):
