@@ -40,28 +40,28 @@ const RES_PRIZES := [5, 3, 1]
 const TILE_W := 1342.0
 const TILE_H := 1172.0
 const WEALTH_X := [482, 575, 670, 764, 858]
-const WEALTH_Y := 172
+const WEALTH_Y := 118
 
 const TILES := {
-	"capitale": {"wealth": [482, 575, 670, 764, 858], "n": "Capitale", "short": "Capitale", "img": "res://assets/tiles/capitale.webp",
+	"capitale": {"wealth": [434, 551, 671, 788, 905], "n": "Capitale", "short": "Capitale", "img": "res://assets/tiles/capitale.webp",
 		"sites": [[671, 585], [506, 367], [764, 366], [1014, 476], [988, 735], [804, 913], [537, 897], [316, 723], [305, 476]],
 		"bishop": [484, 647], "col": Color("#8a9a4a"), "relief": 0.5},
-	"boschivo": {"wealth": [481, 574, 670, 765, 858], "n": "Regno Boschivo", "short": "Boschivo", "img": "res://assets/tiles/boschivo.webp",
+	"boschivo": {"wealth": [434, 551, 671, 788, 905], "n": "Regno Boschivo", "short": "Boschivo", "img": "res://assets/tiles/boschivo.webp",
 		"sites": [[670, 584], [505, 361], [805, 362], [1021, 550], [913, 795], [616, 899], [313, 717]],
 		"bishop": [473, 613], "col": Color("#3f6b2c"), "relief": 0.6},
-	"fluviale": {"wealth": [481, 574, 671, 766, 859], "n": "Regno Fluviale", "short": "Fluviale", "img": "res://assets/tiles/fluviale.webp",
+	"fluviale": {"wealth": [434, 551, 671, 788, 905], "n": "Regno Fluviale", "short": "Fluviale", "img": "res://assets/tiles/fluviale.webp",
 		"sites": [[682, 596], [490, 384], [790, 384], [1005, 580], [870, 860], [578, 906], [322, 740]],
 		"bishop": [474, 628], "col": Color("#4f8a52"), "relief": 0.3},
-	"montano": {"wealth": [484, 576, 670, 764, 857], "n": "Regno Montano", "short": "Montano", "img": "res://assets/tiles/montano.webp",
-		"sites": [[672, 592], [494, 375], [847, 375], [1012, 681], [673, 892], [330, 680]],
+	"montano": {"wealth": [434, 551, 671, 788, 905], "n": "Regno Montano", "short": "Montano", "img": "res://assets/tiles/montano.webp",
+		"sites": [[672, 592], [494, 375], [847, 375], [1012, 681], [673, 916], [330, 680]],
 		"bishop": [492, 649], "col": Color("#7c7f78"), "relief": 1.0},
-	"autunnale": {"wealth": [484, 576, 669, 763, 853], "n": "Regno Autunnale", "short": "Autunnale", "img": "res://assets/tiles/autunnale.webp",
+	"autunnale": {"wealth": [434, 551, 671, 788, 905], "n": "Regno Autunnale", "short": "Autunnale", "img": "res://assets/tiles/autunnale.webp",
 		"sites": [[672, 580], [506, 373], [834, 373], [992, 580], [666, 889], [325, 729]],
 		"bishop": [487, 642], "col": Color("#b0582a"), "relief": 0.5},
-	"collinare": {"wealth": [482, 575, 668, 762, 857], "n": "Regno Collinare", "short": "Collinare", "img": "res://assets/tiles/collinare.webp",
+	"collinare": {"wealth": [434, 551, 671, 788, 905], "n": "Regno Collinare", "short": "Collinare", "img": "res://assets/tiles/collinare.webp",
 		"sites": [[677, 603], [509, 376], [837, 375], [857, 865], [464, 865]],
 		"bishop": [481, 642], "col": Color("#b39a45"), "relief": 0.7},
-	"palustre": {"wealth": [484, 576, 669, 765, 858], "n": "Regno Palustre", "short": "Palustre", "img": "res://assets/tiles/palustre.webp",
+	"palustre": {"wealth": [434, 551, 671, 788, 905], "n": "Regno Palustre", "short": "Palustre", "img": "res://assets/tiles/palustre.webp",
 		"sites": [[670, 609], [448, 378], [894, 378], [893, 861], [447, 861]],
 		"bishop": [428, 623], "col": Color("#5f8a6a"), "relief": 0.15},
 }
