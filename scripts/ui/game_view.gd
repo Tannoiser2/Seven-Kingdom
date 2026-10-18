@@ -1744,14 +1744,12 @@ func _proj_pick_use(id: String) -> void:
 	match id:
 		"I01", "I02", "I03", "I05":
 			pstep = "region"
-		"I04", "A02":
+		"I04":
 			pstep = "char"
 		"I07":
 			pstep = "res"
 		"I08":
 			pstep = "site_a"
-		"A04":
-			pstep = "variant"
 
 
 func _proj_region(r: int) -> void:
@@ -2028,11 +2026,11 @@ func _use_text(u: Dictionary) -> String:
 		"I03": return "Ricchezza %s in %s" % ["+1" if int(u["d"]) == 1 else "-1", st.rname(int(u["r"]))]
 		"I04": return "%s in %s" % [SKData.cn(u["c"]), st.rname(int(u["to"]))]
 		"I05": return "%s influenza in %s" % ["aggiungi" if u["add"] else "togli", st.rname(int(u["r"]))]
-		"I06": return "+2 alle tue battaglie di questo turno"
-		"A01": return "la prossima carta è gratis"
-		"A02": return "%s in %s" % [SKData.cn(u["c"]), st.rname(int(u["to"]))]
-		"A03": return "+1 alle tue battaglie di questo turno"
-		"A04": return "prendi " + " e ".join(u["t"].map(func(t): return SKData.RES_NAME[t]))
+		"I06": return "da ora +1 in tutte le tue battaglie"
+		"A01": return "da ora ogni due carte attivate prendi 1 risorsa fra le spese"
+		"A02": return "da ora i personaggi che scegli fanno un passo in più"
+		"A03": return "da ora +1 in tutte le tue battaglie"
+		"A04": return "da ora un'icona del costo si paga con una risorsa qualsiasi"
 		"I07": return "1 %s da %s" % [SKData.RES_NAME[u["t"]], st.pname(int(u["q"]))]
 		"I08": return "scambio fra %s e %s" % [st.rname(int(u["a"][0])), st.rname(int(u["b"][0]))]
 	return ""
