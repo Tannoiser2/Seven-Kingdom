@@ -135,12 +135,14 @@ func _setup_value(c: SKState, s: int, r: int) -> float:
 	var mine := c.count(r, s)
 	var tot := c.colored(r)
 	# essere Governatore conta molto, la Capitale vale di più
-	if c.governor(r) == s:
-		v += 3.0
-	v += c.econ(r) * 1.2
-	if mine > tot - mine:
-		v += 2.0
-	v -= float(mine) * 0.8
+	# un Governatore vale quanto la Ricchezza che resterà scoperta; ammucchiare villaggi nello
+	# stesso regno rende poco (la maggioranza basta averla, e lì si concentrano Papa e invasori)
+	if c.governor(r) == s and mine == 1:
+		v += 3.0 + 0.5 * c.gov_value(r)
+	v += c.econ(r) * 1.0
+	if mine > tot - mine and mine <= 2:
+		v += 1.5
+	v -= float(mine - 1) * 1.6
 	# la risorsa presa
 	for t in SKData.RESOURCES:
 		v += c.res_prize(s, t) * 0.5

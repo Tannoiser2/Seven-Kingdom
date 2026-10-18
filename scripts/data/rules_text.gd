@@ -10,7 +10,7 @@ Ogni regno ha una traccia di [b]siti[/b] numerati: il sito 1, con la corona, è 
 Le mappe si scelgono nel menu (Il Regno dei Sette è quella del gioco originale) e se ne possono inventare di nuove con l'editor.
 
 [b]PREPARAZIONE[/b]
-Ricchezza 2 in ogni regno, 3 nella Capitale. Su tutti i 45 siti si mettono a caso i 45 segnalini [b]risorsa[/b] (9 ciascuno di legno, pietra, grano, ferro, oro); poi dove parte la Spia arriva un invasore (che distrugge la risorsa del suo sito) e dove parte il Papa un'influenza religiosa sul 5. A turno, dal Primo Giocatore, ognuno mette per tre giri un villaggio sul sito libero più basso di un regno a scelta e prende la risorsa che c'era. L'ultimo giocatore riceve un Favore Papale.
+Ricchezza 2 in ogni regno, 3 nella Capitale. Su tutti i 45 siti si mettono a caso i 45 segnalini [b]risorsa[/b] (9 ciascuno di legno, pietra, grano, ferro, oro); poi dove parte la Spia arriva un invasore (che distrugge la risorsa del suo sito) e dove parte il Papa un'influenza religiosa sul 5. A turno, dal Primo Giocatore, ognuno mette per tre giri un villaggio sul sito libero più basso di un regno a scelta e prende la risorsa che c'era. [i]Regola opzionale «Favore all'ultimo»[/i]: l'ultimo giocatore riceve un Favore Papale (nella versione digitale è spenta di base: nelle prove l'ultimo vinceva troppo spesso).
 Con le [b]carte obiettivo[/b] ognuno ne pesca 3 e ne tiene una, segreta.
 
 [b]IL TURNO[/b]

@@ -174,8 +174,11 @@ func run() -> void:
 			flush_log()
 			changed.emit()
 	var last := (st.first + n - 1) % n
-	st.favor[last] = true
-	log_msg("%s, ultimo a giocare, riceve un Favore Papale." % pname(last))
+	if st.opts.get("t_favfirst", false):
+		last = st.first
+	if st.opts.get("start_favor", false) and not st.opts.get("t_nofav", false):
+		st.favor[last] = true
+		log_msg("%s, ultimo a giocare, riceve un Favore Papale." % pname(last))
 	_mark = 0
 	await _pause("setup")
 	# turni
@@ -200,8 +203,12 @@ func play_turn() -> void:
 	_set_phase("azioni")
 	log_msg("— Turno %d — Primo Giocatore: %s" % [st.turn + 1, pname(st.first)])
 	var start := st.first
+	if st.opts.get("t_rot", false):
+		start = (st.first + st.turn) % n
 	for k in n:
 		var p := (start + k) % n
+		if st.opts.get("t_snake", false) and st.turn % 2 == 1:
+			p = (start + n - 1 - k) % n
 		cur = p
 		var tries := 0
 		_begin_step()

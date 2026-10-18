@@ -11,7 +11,7 @@ var levels := [1, 1, 1, 1]
 var names := ["Casato Rosso", "Casato Blu", "Casato Verde", "Casato Giallo"]
 var speed := 1
 var scen_i := 0
-var opts := {"objectives": true, "dice": false, "alchemist": false}
+var opts := {"objectives": true, "dice": false, "alchemist": false, "start_favor": false}
 var map3d := true
 var pieces3d := true
 var msg: Label
@@ -22,6 +22,7 @@ var scens: Array = []
 const OPT_LIST := [
 	["objectives", "Carte obiettivo", "Ognuno pesca 3 carte obiettivo e ne tiene una in segreto: punti extra a fine partita (o la vittoria, per il Nemico e l'Usurpatore). Consigliate per le prime partite."],
 	["dice", "Guerra col dado", "Regola opzionale: in battaglia si tira un dado e si vince superando il numero di invasori (+1 Favore Papale, +1 Fanteria, +1 Governatore)."],
+	["start_favor", "Favore all'ultimo", "Regola originale: l'ultimo giocatore parte con un Favore Papale. Nelle simulazioni lo avvantaggia troppo (lo usa subito per un Vescovo), per questo di base è spenta."],
 	["alchemist", "Alchimista", "Variante sperimentale «La bottega dell'Alchimista»: l'Alchimista prende il posto del Mercante e pesca progetti (Invenzioni e Artefatti) da realizzare con le risorse, che non danno più punti a fine partita."],
 ]
 
@@ -114,6 +115,11 @@ func _build() -> void:
 	var ol := UI.label("Regole opzionali:", 20, UI.INK, UI.font_bold)
 	ol.custom_minimum_size.x = 190
 	orow.add_child(ol)
+	var ogrid := GridContainer.new()
+	ogrid.columns = 2
+	ogrid.add_theme_constant_override("h_separation", 8)
+	ogrid.add_theme_constant_override("v_separation", 6)
+	orow.add_child(ogrid)
 	for o in OPT_LIST:
 		var on: bool = opts.get(o[0], false)
 		var b := UI.button(o[1] + (": sì" if on else ": no"), 230, 40, 14)
@@ -125,7 +131,7 @@ func _build() -> void:
 			opts[key] = not opts.get(key, false)
 			_store()
 			_build())
-		orow.add_child(b)
+		ogrid.add_child(b)
 	vb.add_child(orow)
 	var vw := HBoxContainer.new()
 	vw.add_theme_constant_override("separation", 8)

@@ -10,9 +10,18 @@ func _init() -> void:
 	var fl: String = args[3] if args.size() > 3 else ""
 	# lettere: o obiettivi, d dado, a Alchimista (con le regole attuali); T senza turno di tregua
 	var opts := {"objectives": fl.contains("o"), "dice": fl.contains("d"), "alchemist": fl.contains("a")}
+	if fl.contains("V"):
+		opts["start_favor"] = true
+	if fl.contains("Q"):
+		opts["t_favfirst"] = true
+	if fl.contains("S"):
+		opts["t_snake"] = true
+	if fl.contains("R"):
+		opts["t_rot"] = true
 	if fl.contains("T"):
 		opts["inv_alt"] = false
 	var wins := {}
+	var seat_det := {}
 	var reasons := {}
 	var turns := 0
 	var pts := {}
@@ -52,6 +61,11 @@ func _init() -> void:
 		turns += eng.st.turn
 		for d in rk:
 			pts[d["p"]] = pts.get(d["p"], 0) + d["tot"]
+			var sd: Dictionary = eng.st.score_detail(d["p"])
+			for kk in sd:
+				var key: String = "%d_%s" % [d["p"], kk]
+				seat_det[key] = seat_det.get(key, 0.0) + float(sd[kk]) / games
+			seat_det["%d_villaggi_n" % d["p"]] = seat_det.get("%d_villaggi_n" % d["p"], 0.0) + float(eng.st.colored_total(d["p"]) if eng.st.has_method("colored_total") else 0) / games
 		var tcur := 0
 		var any_a := false
 		for l in eng.st.log_lines:
@@ -97,6 +111,11 @@ func _init() -> void:
 	print("vittorie per posto: ", wins)
 	print("punti medi: ", pts.keys().map(func(k): return "%d=%.1f" % [k, float(pts[k]) / games]))
 	print("fine per: ", reasons)
+	for q in levels.size():
+		var line := "posto %d:" % q
+		for kk in ["tot", "villaggi", "gov", "vescovi", "risorse", "progetti", "corona", "favore"]:
+			line += " %s %.1f" % [kk, seat_det.get("%d_%s" % [q, kk], 0.0)]
+		print(line)
 	print("Mercante/Alchimista scelto in media %.2f volte a partita (potenziata %d volte su %d); partite in cui viene scelto almeno una volta: %d su %d" % [float(alch_used) / games, alch_pw, alch_used, games_with_alch, games])
 	print("  scelte per turno: ", alch_turn)
 	if opts["alchemist"]:
