@@ -472,30 +472,34 @@ static var alch := false
 
 const PROJ_IDS := ["I01", "I02", "I03", "I04", "I05", "I06", "I07", "I08", "A01", "A02", "A03", "A04"]
 const PROJECTS := {
-	"I01": {"n": "Cantiere istantaneo", "kind": "inv", "cost": {"legno": 1, "pietra": 2}, "pv": 2,
+	"I01": {"n": "Cantiere istantaneo", "kind": "inv", "cost": {"legno": 1, "pietra": 1}, "pv": 2,
 		"t": "piazza 1 tuo villaggio nel primo sito libero di un regno dove sei già presente, senza guerra né eserciti. Raccogli l'eventuale risorsa."},
 	"I02": {"n": "Solvente degli invasori", "kind": "inv", "cost": {"grano": 1, "ferro": 1}, "pv": 2,
 		"t": "in un regno non in guerra dove hai un villaggio, rimuovi l'invasore dal numero più basso. Non costruisci al suo posto."},
-	"I03": {"n": "Elisir della fortuna", "kind": "inv", "cost": {"grano": 1, "oro": 1}, "pv": 1,
+	"I03": {"n": "Elisir della fortuna", "kind": "inv", "cost": {"oro": 1}, "pv": 1,
 		"t": "in un regno non in guerra dove hai un villaggio, aumenta o diminuisci la Ricchezza di 1 (non sotto 1, non oltre 5 né oltre un'influenza religiosa)."},
-	"I04": {"n": "Stivali del vento", "kind": "inv", "cost": {"legno": 1, "grano": 1}, "pv": 1,
+	"I04": {"n": "Stivali del vento", "kind": "inv", "cost": {"grano": 1}, "pv": 1,
 		"t": "muovi di 1 passo legale un personaggio a scelta, anche già usato nel turno. Non compie azioni e non torna disponibile."},
-	"I05": {"n": "Incenso consacrato", "kind": "inv", "cost": {"pietra": 1, "oro": 1}, "pv": 1,
+	"I05": {"n": "Incenso consacrato", "kind": "inv", "cost": {"pietra": 1, "oro": 1}, "pv": 2,
 		"t": "in un regno non in guerra dove hai un villaggio, aggiungi 1 influenza religiosa al valore scoperto più alto oppure rimuovi quella al valore occupato più basso."},
-	"I06": {"n": "Polvere del tuono", "kind": "inv", "cost": {"pietra": 1, "ferro": 2}, "pv": 2, "auto": true,
+	"I06": {"n": "Polvere del tuono", "kind": "inv", "cost": {"legno": 1}, "pv": 1, "auto": true,
 		"t": "Le tue battaglie di questo turno ricevono +2 forza."},
-	"I07": {"n": "Mano invisibile", "kind": "inv", "cost": {"grano": 1, "oro": 1}, "pv": 2,
+	"I07": {"n": "Mano invisibile", "kind": "inv", "cost": {"oro": 1}, "pv": 1,
 		"t": "prendi 1 risorsa a scelta dalla riserva di un avversario qualsiasi."},
-	"I08": {"n": "Specchio degli scambi", "kind": "inv", "cost": {"legno": 1, "oro": 1}, "pv": 1,
+	"I08": {"n": "Specchio degli scambi", "kind": "inv", "cost": {"legno": 1, "oro": 1}, "pv": 2,
 		"t": "scambia 1 tuo villaggio e 1 avversario in due regni collegati da un ponte (non i siti 1 né gli invasori). Ammesso anche in guerra."},
-	"A01": {"n": "Athanor", "kind": "art", "cost": {"legno": 1, "pietra": 1, "ferro": 1}, "pv": 3, "auto": true,
-		"t": "La prossima carta che attivi in questo turno non costa risorse."},
-	"A02": {"n": "Bussola celeste", "kind": "art", "cost": {"legno": 1, "ferro": 1, "oro": 1}, "pv": 2,
-		"t": "Muovi un personaggio a scelta di 1 o 2 passi (la Cavalleria senza porti). Non compie azioni."},
-	"A03": {"n": "Stendardo animato", "kind": "art", "cost": {"legno": 1, "grano": 1, "ferro": 1}, "pv": 2, "auto": true,
-		"t": "Nelle tue battaglie di questo turno: +1 alla tua forza."},
-	"A04": {"n": "Trasmutatore", "kind": "art", "cost": {"pietra": 1, "grano": 1, "oro": 1}, "pv": 2,
-		"t": "Prendi 2 risorse a scelta dalla riserva delle risorse spese."},
+	"A01": {"n": "Athanor", "kind": "art", "cost": {"pietra": 1, "ferro": 1}, "pv": 2, "auto": true,
+		"perm": true,
+		"t": "Permanente: dopo ogni carta che attivi prendi 1 risorsa dalla riserva delle spese (quella che ti serve di più)."},
+	"A02": {"n": "Bussola celeste", "kind": "art", "cost": {"legno": 1, "ferro": 1}, "pv": 2,
+		"auto": true, "perm": true,
+		"t": "Permanente: i personaggi che scegli possono fare 1 passo in più (la Cavalleria fino a 3), senza tornare in un regno già visitato."},
+	"A03": {"n": "Stendardo animato", "kind": "art", "cost": {"grano": 1, "ferro": 1}, "pv": 2, "auto": true,
+		"perm": true,
+		"t": "Permanente: +1 alla tua forza in tutte le tue battaglie."},
+	"A04": {"n": "Trasmutatore", "kind": "art", "cost": {"pietra": 1, "grano": 1}, "pv": 2,
+		"auto": true, "perm": true,
+		"t": "Permanente: quando attivi una carta puoi pagare 1 icona del costo con una risorsa qualsiasi."},
 }
 
 static func proj_img(id: String) -> String:
@@ -512,20 +516,20 @@ static func cshort(c: String) -> String:
 
 static func cbrief(c: String) -> Array:
 	if alch and c == "mercante":
-		return ["Attiva 1 tua carta pagandone il costo.", "Attiva 2 tue carte."]
+		return ["Attiva 1 tua carta pagandone il costo.", "Attiva 2 tue carte e prendi 1 jolly."]
 	return CHAR_BRIEF[c]
 
 
 static func cpassive(c: String) -> String:
 	if alch and c == "mercante":
-		return "Ricchezza +1 qui; chi ha la maggioranza attiva 1 carta."
+		return "Ricchezza +1; chi ha la maggioranza prende 1 jolly e attiva 1 carta."
 	return CHAR_PASSIVE[c]
 
 
 static func ctext(c: String) -> Dictionary:
 	if alch and c == "mercante":
 		return {"normale": "Attiva 1 delle tue carte: paghi il costo in risorse, ne risolvi l'effetto e la giri. Da quel momento non ha più effetto e a fine partita vale i PV stampati.",
-			"potenziata": "Attiva 2 delle tue carte.", "passiva": CHAR_TEXT["mercante"]["passiva"] + " Inoltre chi ha la maggioranza nel regno dell'Alchimista può attivare 1 delle sue carte."}
+			"potenziata": "Attiva 2 delle tue carte e ricevi una risorsa jolly.", "passiva": CHAR_TEXT["mercante"]["passiva"] + " Inoltre chi ha la maggioranza nel regno dell'Alchimista riceve una risorsa jolly (vale come qualsiasi risorsa) e può attivare 1 delle sue carte."}
 	return CHAR_TEXT[c]
 
 

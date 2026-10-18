@@ -414,7 +414,16 @@ func _alch_potential(c: SKState, p: int) -> float:
 	var v := 0.0
 	for id in c.hand[p]:
 		v += 0.35 * float(SKData.PROJECTS[id]["pv"]) * (1.0 if c.can_afford(p, id) else 0.5)
-	v += 0.3 * c.total_res(p)
+	v += 0.3 * c.total_res(p) + 0.6 * int(c.jolly[p])
+	# Artefatti girati: effetti permanenti
+	if c.has_art(p, "A01"):
+		v += 1.5
+	if c.has_art(p, "A02"):
+		v += 1.0
+	if c.has_art(p, "A03"):
+		v += 0.8
+	if c.has_art(p, "A04"):
+		v += 1.0
 	return v
 
 

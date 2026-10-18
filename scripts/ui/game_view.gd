@@ -550,6 +550,9 @@ func _refresh_left() -> void:
 			res_nodes[p][t] = holder
 			rs.add_child(holder)
 		vb.add_child(rs)
+		if st.alch() and int(st.jolly[p]) > 0:
+			var jl := UI.label("Jolly: %d (vale come qualsiasi risorsa)" % int(st.jolly[p]), 14, UI.GOLD, UI.font_bold)
+			vb.add_child(jl)
 		if st.alch():
 			vb.add_child(_house_projects(p))
 		if picking_res and int(sel.get("from", -1)) == p and not sel["res"].is_empty():
@@ -1849,12 +1852,34 @@ func _proj_thumb(id: String, w: float, state: int, cb: Callable) -> Control:
 	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if state == 3:
 		tr.modulate = Color(0.55, 0.55, 0.55)
-	pc.add_child(tr)
 	var d: Dictionary = SKData.PROJECTS[id]
+	# costo e PV aggiornati della variante (le tessere stampate riportano ancora quelli del prototipo 0.2)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 1)
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(tr)
+	if w >= 60:
+		var strip := HBoxContainer.new()
+		strip.add_theme_constant_override("separation", 1)
+		strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		for t in d["cost"]:
+			for k in int(d["cost"][t]):
+				var ic := UI.icon("res://assets/res/%s.webp" % t, 18)
+				ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				strip.add_child(ic)
+		var gap := Control.new()
+		gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		strip.add_child(gap)
+		var pvl := UI.label("%d PV" % int(d["pv"]), 13, UI.GOLD, UI.font_bold)
+		pvl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		strip.add_child(pvl)
+		vb.add_child(strip)
+	pc.add_child(vb)
 	var cost := []
 	for t in d["cost"]:
 		cost.append("%d %s" % [int(d["cost"][t]), SKData.RES_NAME[t]])
-	pc.tooltip_text = "%s (%s, %d PV)\nCosto: %s\n%s" % [d["n"], "Invenzione" if d["kind"] == "inv" else "Artefatto", int(d["pv"]), ", ".join(cost), d["t"]]
+	pc.tooltip_text = "%s (%s, %d PV)\nCosto: %s\n%s" % [d["n"], "Invenzione, effetto una volta" if d["kind"] == "inv" else "Artefatto, effetto permanente", int(d["pv"]), ", ".join(cost), d["t"]]
 	pc.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	pc.gui_input.connect(func(ev):
 		if _is_click(ev):
@@ -1865,8 +1890,8 @@ func _proj_thumb(id: String, w: float, state: int, cb: Callable) -> Control:
 func _build_projects_prompt(_w: float) -> void:
 	var st: SKState = engine.st
 	var me := _me()
-	prompt_box.add_child(UI.title("I progetti, %s" % engine.pname(me), 20))
-	prompt_box.add_child(UI.wrap("Realizza e usa i progetti nel riquadro in basso sulla mappa, poi «Conferma» (o «Nessun progetto»).", 17, UI.LIGHT, RW - 40))
+	prompt_box.add_child(UI.title("Le carte dell'Alchimista, %s" % engine.pname(me), 20))
+	prompt_box.add_child(UI.wrap("Scegli la carta da attivare nel riquadro in basso sulla mappa, poi «Attiva» (o «Non attivare»).", 17, UI.LIGHT, RW - 40))
 	# il pannello dei progetti sta sopra la mappa, in basso: c'è più spazio per le tessere
 	proj_pc = PanelContainer.new()
 	proj_pc.add_theme_stylebox_override("panel", UI.night(0.94))
