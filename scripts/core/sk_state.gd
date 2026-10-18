@@ -1093,7 +1093,13 @@ func end_phase(_ch = null) -> void:
 	if check_end():
 		return
 	# invasione: nei regni senza personaggi, non pacificati e non in guerra
+	# (regola di prova «invasione a turni alterni»: solo nei turni pari)
+	var invade: bool = not (opts.get("inv_alt", false) and turn % 2 == 0)
+	if not invade:
+		log_msg("Turno di tregua: questa volta non arrivano invasori.")
 	for r in regions.size():
+		if not invade:
+			break
 		var rg: Dictionary = regions[r]
 		if rg["peace"] or rg["war"]:
 			continue
