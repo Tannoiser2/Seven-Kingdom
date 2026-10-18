@@ -425,7 +425,7 @@ func refresh() -> void:
 	var who := ""
 	if engine.cur >= 0:
 		who = " — tocca a %s" % engine.pname(engine.cur)
-	phase_lbl.text = {"obiettivi": "Scelta degli obiettivi", "preparazione": "Piazzamento iniziale", "azioni": "Azioni dei giocatori", "passive": "Azioni passive dei personaggi", "fine turno": "Fine del turno", "fine": "Partita conclusa"}.get(ph, ph) + who + "   ·   Guerre %d/3 · Regni in pace %d/%d" % [st.war_count(), st.peace_count(), 4 if st.alch() and st.opts.get("alch_peace4", true) else 3] + ("   ·   Tregua" if st.truce_turn() and ph != "fine" else "")
+	phase_lbl.text = {"obiettivi": "Scelta degli obiettivi", "preparazione": "Piazzamento iniziale", "azioni": "Azioni dei giocatori", "passive": "Azioni passive dei personaggi", "fine turno": "Fine del turno", "fine": "Partita conclusa"}.get(ph, ph) + who + "   ·   Guerre %d/3 · Regni in pace %d/%d" % [st.war_count(), st.peace_count(), st.peace_needed()] + ("   ·   Tregua" if st.truce_turn() and ph != "fine" else "")
 	_refresh_left()
 	_refresh_cards()
 	_apply_highlight()
@@ -1742,7 +1742,7 @@ func _proj_pick_use(id: String) -> void:
 	if uses.is_empty():
 		return
 	match id:
-		"I01", "I02", "I03", "I05":
+		"I01", "I02", "I03", "I05", "I06":
 			pstep = "region"
 		"I04":
 			pstep = "char"
@@ -1980,7 +1980,7 @@ func _proj_contents(st: SKState, me: int, W: float) -> void:
 					elif uid == "I03":
 						lab = "Ricchezza +1" if int(u["d"]) == 1 else "Ricchezza -1"
 					else:
-						lab = "Aggiungi influenza" if u["add"] else "Togli influenza"
+						lab = "Aggiungi 2 influenze" if u["add"] else "Togli fino a 2"
 					var bb := UI.button(lab, 160, 36, 13)
 					var uu: Dictionary = u
 					bb.pressed.connect(func():
@@ -2022,11 +2022,11 @@ func _use_text(u: Dictionary) -> String:
 	var st: SKState = engine.st
 	match str(u["id"]):
 		"I01": return "un villaggio in %s" % st.rname(int(u["r"]))
-		"I02": return "via un invasore da %s" % st.rname(int(u["r"]))
+		"I02": return "via fino a 2 invasori da %s" % st.rname(int(u["r"]))
 		"I03": return "Ricchezza %s in %s" % ["+1" if int(u["d"]) == 1 else "-1", st.rname(int(u["r"]))]
 		"I04": return "%s in %s" % [SKData.cn(u["c"]), st.rname(int(u["to"]))]
-		"I05": return "%s influenza in %s" % ["aggiungi" if u["add"] else "togli", st.rname(int(u["r"]))]
-		"I06": return "da ora +1 in tutte le tue battaglie"
+		"I05": return "%s influenza in %s" % ["+2" if u["add"] else "-2", st.rname(int(u["r"]))]
+		"I06": return "un invasore (e la Guerra) in %s" % st.rname(int(u["r"])) if u.has("r") else ""
 		"A01": return "da ora ogni due carte attivate prendi 1 risorsa fra le spese"
 		"A02": return "da ora i personaggi che scegli fanno un passo in più"
 		"A03": return "da ora +1 in tutte le tue battaglie"

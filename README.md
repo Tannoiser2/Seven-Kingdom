@@ -74,6 +74,7 @@ assets/models/                miniature 3D (Meshy, image-to-3D dalle illustrazio
 ## Test
 ```
 godot --headless --path . -s res://tests/sim.gd -- 40 2,1,2,1 base     # partite IA contro IA (livelli per posto)
+godot --headless --path . -s res://tests/sim.gd -- 100 1,1,1 base a      # con l'Alchimista (lettere: o obiettivi, d dado, a Alchimista, T senza tregua)
 godot --headless --path . -s res://tests/ui_play.gd -- 6               # partite giocate dall'interfaccia
 python3 tests/firebase_mock.py 8765 & …tests/online_play.gd            # due dispositivi online sul finto Firebase
 xvfb-run godot --path . -s res://tests/shot.gd -- game 1 1 2           # screenshot (mappa 3D, pedine 3D)

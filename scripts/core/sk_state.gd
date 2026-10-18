@@ -495,6 +495,8 @@ func _add_invader(r: int, can_war := true) -> bool:
 	var st: Array = rg["sites"]
 	for i in range(st.size() - 1, -1, -1):
 		if st[i] >= 0 and st[i] < INV:
+			if i == 0 and gov_safe(r):
+				continue
 			var p: int = st[i]
 			_return_piece(p)
 			st[i] = INV
@@ -508,12 +510,34 @@ func _add_invader(r: int, can_war := true) -> bool:
 
 
 ## Un invasore sostituisce il villaggio sul sito più alto (costo della guerra, battaglia persa).
+## Il Governatore resiste agli invasori (prova di bilanciamento dell'Alchimista).
+var _in_battle := false
+
+
+func gov_safe(r: int) -> bool:
+	if not alch():
+		return false
+	var g: int = regions[r]["sites"][0]
+	if g < 0 or g >= INV:
+		return false
+	if opts.get("alch_gov_safe", false):
+		return true
+	if opts.get("alch_gov_siege", true):
+		return not _in_battle
+	if opts.get("alch_gov_near", false):
+		var ra: int = chars["mercante"]
+		return r == ra or land[ra].has(r)
+	return opts.get("alch_banner_gov", false) and has_art(g, "A03")
+
+
 func _invader_replaces(r: int) -> void:
 	if inv_supply <= 0:
 		return
 	var st: Array = regions[r]["sites"]
 	for i in range(st.size() - 1, -1, -1):
 		if st[i] >= 0 and st[i] < INV:
+			if i == 0 and gov_safe(r):
+				continue
 			var p: int = st[i]
 			_return_piece(p)
 			st[i] = INV
@@ -1030,7 +1054,7 @@ func _battle(ch, p: int, r: int, army: String) -> void:
 	if alch() and has_art(p, "A03"):
 		atk += 1
 		parts.append("Stendardo animato +1")
-	if alch() and has_art(p, "I06"):
+	if alch() and has_art(p, "I06") and not opts.get("alch_powder_war", true):
 		atk += 1
 		parts.append("Polvere del tuono +1")
 	if alch() and int(turn_bonus[p]) > 0:
@@ -1075,7 +1099,9 @@ func _battle(ch, p: int, r: int, army: String) -> void:
 		log_msg("VITTORIA! %s libera %s e ne diventa Governatore." % [pname(p), rname(r)])
 		_check_peace(r)
 	else:
+		_in_battle = true
 		_invader_replaces(r)
+		_in_battle = false
 		log_msg("Sconfitta: gli invasori resistono in %s." % rname(r))
 
 
@@ -1095,17 +1121,20 @@ func end_phase(_ch = null) -> void:
 	# invasione: nei regni senza personaggi, non pacificati e non in guerra
 	# (regola di prova «invasione a turni alterni»: solo nei turni pari)
 	var invade: bool = not (truce_turn())
-	if not invade:
+	var raid: bool = not invade and opts.get("alch_truce_raid", false)
+	if not invade and not raid:
 		log_msg("Turno di tregua: questa volta non arrivano invasori.")
 	for r in regions.size():
-		if not invade:
+		if not invade and not raid:
 			break
 		var rg: Dictionary = regions[r]
 		if rg["peace"] or rg["war"]:
 			continue
 		if not chars_in(r).is_empty():
 			continue
-		if alch() and opts.get("alch_inv_soft", false) and colored(r) > 0:
+		if raid and lowest_free(r) >= 0:
+			continue
+		if invade and alch() and opts.get("alch_inv_soft", false) and colored(r) > 0:
 			continue
 		if _add_invader(r):
 			log_msg("Invasione! Gli invasori dilagano in %s, lasciato senza personaggi." % rname(r))
@@ -1125,11 +1154,18 @@ func truce_turn() -> bool:
 
 
 ## Controllo di fine gioco. Restituisce true (e imposta game_over) se la partita è finita.
+## Regni pacificati che fanno finire la partita (4 con l'Alchimista a 4 o più giocatori).
+func peace_needed() -> int:
+	if alch() and opts.get("alch_peace4", true) and not (opts.get("alch_peace3p", true) and n <= 3):
+		return 4
+	return 3
+
+
 func check_end() -> bool:
 	# variante dell'Alchimista, regola di durata: nessuna fine prima del 5° turno
 	if alch() and opts.get("alch_late", false) and turn < 4:
 		return false
-	var peace_need := 4 if alch() and opts.get("alch_peace4", true) else 3
+	var peace_need := peace_needed()
 	var war_need := 4 if alch() and opts.get("alch_wars4", false) else 3
 	if war_count() >= war_need:
 		end_reason = "guerre"
@@ -1153,7 +1189,7 @@ func check_end() -> bool:
 
 const END_TEXT := {
 	"guerre": "Tre Guerre infuriano contemporaneamente nel regno.",
-	"pace": "I regni pacificati sono abbastanza (tre, quattro con l'Alchimista).",
+	"pace": "I regni pacificati sono abbastanza (tre, quattro con l'Alchimista a 4 giocatori).",
 	"invasione": "Un regno è caduto interamente in mano agli invasori.",
 	"fede": "La Ricchezza di un regno è tutta coperta dall'influenza religiosa.",
 	"papa": "Il Papa ha esaurito l'influenza religiosa.",
@@ -1471,9 +1507,11 @@ func _do_projects(p: int, v: Dictionary) -> String:
 	elif SKData.PROJECTS[b].get("auto", false):
 		_use_invention(p, b, {"id": b})
 	# l'Alchimista purifica: ogni carta attivata scaccia un invasore dal suo regno
-	if opts.get("alch_slow", true):
+	if opts.get("alch_slow", false):
 		var ra: int = chars["mercante"]
 		var ix: int = regions[ra]["sites"].rfind(INV)
+		if opts.get("alch_purge_peace_only", false) and regions[ra]["war"]:
+			ix = -1
 		if ix >= 0:
 			regions[ra]["sites"][ix] = -1
 			inv_supply += 1
@@ -1498,7 +1536,7 @@ func _use_invention(p: int, id: String, u: Dictionary) -> String:
 				return "scegli un regno"
 			if regions[r]["war"] and id != "I02":
 				return "non in un regno in guerra"
-			if count(r, p) <= 0:
+			if count(r, p) <= 0 and not (id == "I02" and opts.get("alch_solvent3", false) and (r == chars["mercante"] or land[chars["mercante"]].has(r))):
 				return "serve un tuo villaggio nel regno"
 			match id:
 				"I01":
@@ -1507,13 +1545,15 @@ func _use_invention(p: int, id: String, u: Dictionary) -> String:
 					var lf := lowest_free(r)
 					if lf < 0 or reserve[p] <= 0:
 						return "nessun sito libero o nessun villaggio in riserva"
+					if opts.get("alch_build_nofill", false) and count(r, -1) <= 1:
+						return "non puoi occupare l'ultimo sito libero"
 					_put(r, lf, p)
 					ev("place", {"r": r, "i": lf, "p": p})
 					log_msg("%s: %s costruisce un villaggio in %s." % [nm, pname(p), rname(r)])
 					_check_peace(r)
 				"I02":
 					var k2 := 0
-					for z in 2:
+					for z in (3 if opts.get("alch_solvent3", false) else 2):
 						var idx: int = regions[r]["sites"].find(INV)
 						if idx < 0:
 							break
@@ -1547,7 +1587,14 @@ func _use_invention(p: int, id: String, u: Dictionary) -> String:
 						if not can_influence(r):
 							return "non c'è posto per l'influenza religiosa"
 						_place_influence(r)
-						log_msg("%s: un'influenza religiosa in più in %s." % [nm, rname(r)])
+						if opts.get("alch_incense2add", true) and can_influence(r):
+							_place_influence(r)
+							log_msg("%s: due influenze religiose in più in %s." % [nm, rname(r)])
+						else:
+							log_msg("%s: un'influenza religiosa in più in %s." % [nm, rname(r)])
+						if opts.get("alch_incense_burn", false) and infl_supply > 0:
+							infl_supply -= 1
+							log_msg("L'incenso brucia: il Papa perde un'altra influenza religiosa.")
 					else:
 						if int(regions[r]["infl"]) <= 0:
 							return "nel regno non c'è influenza religiosa"
@@ -1556,7 +1603,8 @@ func _use_invention(p: int, id: String, u: Dictionary) -> String:
 							if int(regions[r]["infl"]) <= 0:
 								break
 							regions[r]["infl"] -= 1
-							infl_supply += 1
+							if not opts.get("alch_incense_out", true) or z == 0:
+								infl_supply += 1
 							ev("infl_out", {"r": r})
 						log_msg("%s: l'influenza religiosa lascia %s e torna al Papa." % [nm, rname(r)])
 		"A01", "A02", "A03", "A04":
@@ -1573,7 +1621,18 @@ func _use_invention(p: int, id: String, u: Dictionary) -> String:
 			ev("move", {"c": c, "path": [from, to]})
 			log_msg("%s: %s porta %s in %s." % [nm, pname(p), SKData.cn(c), rname(to)])
 		"I06":
-			log_msg("%s: da ora il suo effetto è permanente per %s." % [nm, pname(p)])
+			if opts.get("alch_powder_war", true) and u.has("r"):
+				var rw := int(u["r"])
+				if rw != chars["mercante"] and not land[chars["mercante"]].has(rw):
+					return "regno non collegato all'Alchimista"
+				if regions[rw]["peace"]:
+					return "il regno è pacificato"
+				if _add_invader(rw):
+					log_msg("%s: un'esplosione porta un invasore in %s." % [nm, rname(rw)])
+					if opts.get("alch_powder_start", true) and not regions[rw]["war"] and colored(rw) > 0:
+						_start_war(rw)
+			if not opts.get("alch_powder_war", true):
+				log_msg("%s: da ora +1 nelle battaglie di %s." % [nm, pname(p)])
 		"I07":
 			var q := int(u.get("q", -1))
 			var t: String = str(u.get("t", ""))
@@ -1633,11 +1692,11 @@ func invention_uses(p: int, id: String) -> Array:
 	match id:
 		"I01", "I02", "I03", "I05":
 			for r in regions.size():
-				if (regions[r]["war"] and id != "I02") or count(r, p) <= 0:
+				if (regions[r]["war"] and id != "I02") or (count(r, p) <= 0 and not (id == "I02" and opts.get("alch_solvent3", false) and (r == chars["mercante"] or land[chars["mercante"]].has(r)))):
 					continue
 				match id:
 					"I01":
-						if not has_army(r) and lowest_free(r) >= 0 and reserve[p] > 0:
+						if not has_army(r) and lowest_free(r) >= 0 and reserve[p] > 0 and not (opts.get("alch_build_nofill", false) and count(r, -1) <= 1):
 							out.append({"id": id, "r": r})
 					"I02":
 						if regions[r]["sites"].has(INV):
@@ -1658,6 +1717,12 @@ func invention_uses(p: int, id: String) -> Array:
 				for to in _steps_from(chars[c], c, 1):
 					out.append({"id": id, "c": c, "to": to})
 		"I06", "A01", "A02", "A03", "A04":
+			if id == "I06" and opts.get("alch_powder_war", true):
+				var ra2: int = chars["mercante"]
+				for rw in [ra2] + land[ra2]:
+					if not regions[rw]["peace"]:
+						out.append({"id": id, "r": rw})
+				return out
 			out.append({"id": id, "x": 1})
 		"I07":
 			for q in n:

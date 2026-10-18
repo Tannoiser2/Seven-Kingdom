@@ -7,10 +7,11 @@ func _init() -> void:
 	var games := int(args[0]) if args.size() > 0 else 10
 	var levels: Array = (args[1] if args.size() > 1 else "1,1,1,1").split(",")
 	var scen_id: String = args[2] if args.size() > 2 else "base"
-	var opts := {"objectives": args.size() > 3 and args[3].contains("o"), "dice": args.size() > 3 and args[3].contains("d"), "alchemist": args.size() > 3 and args[3].contains("a"),
-		"alch_incenso2": not (args.size() > 3 and args[3].contains("x")), "alch_peace4": not (args.size() > 3 and args[3].contains("x")), "alch_late": args.size() > 3 and args[3].contains("5"),
-		"alch_wars4": args.size() > 3 and args[3].contains("w"), "alch_inv_soft": args.size() > 3 and args[3].contains("s"),
-		"inv_alt": args.size() > 3 and (args[3].contains("t") or (args[3].contains("a") and not args[3].contains("x")))}
+	var fl: String = args[3] if args.size() > 3 else ""
+	# lettere: o obiettivi, d dado, a Alchimista (con le regole attuali); T senza turno di tregua
+	var opts := {"objectives": fl.contains("o"), "dice": fl.contains("d"), "alchemist": fl.contains("a")}
+	if fl.contains("T"):
+		opts["inv_alt"] = false
 	var wins := {}
 	var reasons := {}
 	var turns := 0
@@ -41,6 +42,13 @@ func _init() -> void:
 		var w: int = rk[0]["p"]
 		wins[w] = wins.get(w, 0) + 1
 		reasons[eng.st.end_reason] = reasons.get(eng.st.end_reason, 0) + 1
+		if eng.st.end_reason == "invasione":
+			for r in eng.st.regions.size():
+				if eng.st.count(r, SKState.INV) == eng.st.regions[r]["sites"].size():
+					var k := "inv_war" if eng.st.log_lines.any(func(l): return l.contains("GUERRA in " + eng.st.rname(r))) else "inv_empty"
+					k += str(eng.st.regions[r]["sites"].size())
+					reasons[k] = reasons.get(k, 0) + 1
+					break
 		turns += eng.st.turn
 		for d in rk:
 			pts[d["p"]] = pts.get(d["p"], 0) + d["tot"]

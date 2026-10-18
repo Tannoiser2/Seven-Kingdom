@@ -418,8 +418,6 @@ func _alch_potential(c: SKState, p: int) -> float:
 	# Artefatti girati: effetti permanenti
 	if c.has_art(p, "A01"):
 		v += 0.8
-	if c.has_art(p, "I06"):
-		v += 0.8
 	if c.has_art(p, "A02"):
 		v += 1.0
 	if c.has_art(p, "A03"):
