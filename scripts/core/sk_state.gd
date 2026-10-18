@@ -1099,6 +1099,8 @@ func end_phase(_ch = null) -> void:
 			continue
 		if not chars_in(r).is_empty():
 			continue
+		if alch() and opts.get("alch_inv_soft", false) and colored(r) > 0:
+			continue
 		if _add_invader(r):
 			log_msg("Invasione! Gli invasori dilagano in %s, lasciato senza personaggi." % rname(r))
 	used.clear()
@@ -1117,7 +1119,8 @@ func check_end() -> bool:
 	if alch() and opts.get("alch_late", false) and turn < 4:
 		return false
 	var peace_need := 4 if alch() and opts.get("alch_peace4", true) else 3
-	if war_count() >= 3:
+	var war_need := 4 if alch() and opts.get("alch_wars4", false) else 3
+	if war_count() >= war_need:
 		end_reason = "guerre"
 	elif peace_count() >= peace_need:
 		end_reason = "pace"
