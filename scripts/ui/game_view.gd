@@ -1699,58 +1699,56 @@ func _move() -> Dictionary:
 
 ## Stato dopo Trasmutatore e realizzazione scelti (per sapere cosa si potrà usare e su quali bersagli).
 func _proj_state() -> SKState:
+	# lo stato dopo aver pagato la carta scelta (senza ancora l'effetto): servono i bersagli possibili
 	var c: SKState = engine.st.clone()
-	var v := {}
-	if not psel.get("t", []).is_empty():
-		v["t"] = psel["t"]
-	if psel.get("b", "") != "":
-		v["b"] = psel["b"]
-	if not v.is_empty():
-		c._do_projects(_me(), v)
+	var id: String = psel.get("b", "")
+	if id != "":
+		var keep := c.free_next.duplicate()
+		c._do_projects(_me(), {"b": id})
+		c.free_next = keep
 	return c
 
 
 func _proj_uses(id: String) -> Array:
-	return _proj_state().invention_uses(_me(), id)
+	var st: SKState = engine.st
+	return st.invention_uses(_me(), id)
 
 
 func _proj_value() -> Dictionary:
 	var v := {}
-	if not psel.get("t", []).is_empty():
-		v["t"] = psel["t"]
 	if psel.get("b", "") != "":
 		v["b"] = psel["b"]
-	if not psel.get("u", {}).is_empty():
-		v["u"] = psel["u"]
+	var u: Dictionary = psel.get("u", {}).duplicate()
+	u.erase("id")
+	u.erase("x")
+	if not u.is_empty():
+		v["u"] = u
 	return v
 
 
-## Sceglie l'Invenzione da usare e il primo passo della scelta del bersaglio.
+## Sceglie la carta da attivare e il primo passo della scelta del bersaglio del suo effetto.
 func _proj_pick_use(id: String) -> void:
-	if psel.get("uid", "") == id:
-		psel["uid"] = ""
-		psel["u"] = {}
-		pstep = ""
-		return
+	psel["b"] = id
 	psel["uid"] = id
 	psel["u"] = {}
 	psel.erase("uc")
 	psel.erase("ua")
 	psel.erase("ur")
+	pstep = ""
 	var uses := _proj_uses(id)
+	if uses.is_empty():
+		return
 	match id:
 		"I01", "I02", "I03", "I05":
 			pstep = "region"
-		"I04":
+		"I04", "A02":
 			pstep = "char"
-		"I06":
-			pstep = ""
-			if not uses.is_empty():
-				psel["u"] = uses[0]
 		"I07":
 			pstep = "res"
 		"I08":
 			pstep = "site_a"
+		"A04":
+			pstep = "variant"
 
 
 func _proj_region(r: int) -> void:
@@ -1890,150 +1888,111 @@ func _build_projects_prompt(_w: float) -> void:
 
 
 func _proj_contents(st: SKState, me: int, W: float) -> void:
-	var ps := _proj_state()
-	# tre colonne: realizzare | usare | Trasmutatore, suggerimento e pulsanti
 	var cols := HBoxContainer.new()
 	cols.add_theme_constant_override("separation", 18)
 	prompt_box.add_child(cols)
-	var c_build := VBoxContainer.new()
-	var c_use := VBoxContainer.new()
+	var c_cards := VBoxContainer.new()
 	var c_side := VBoxContainer.new()
-	c_side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for cc in [c_build, c_use, c_side]:
+	c_side.custom_minimum_size = Vector2(340, 0)
+	for cc in [c_cards, c_side]:
 		cc.add_theme_constant_override("separation", 4)
 		cols.add_child(cc)
-	var box := prompt_box
-	prompt_box = c_side
-	# Trasmutatore
-	if st.has_art(me, "A04") or psel.get("b", "") == "A04":
-		prompt_box.add_child(UI.label("Trasmutatore: dai una tua risorsa e prendine una spesa", 15, UI.GOLD, UI.font_italic))
-		for side in [0, 1]:
-			var row := HBoxContainer.new()
-			row.add_theme_constant_override("separation", 4)
-			row.add_child(UI.label("Dai:" if side == 0 else "Prendi:", 14, UI.LIGHT))
-			for t in SKData.RESOURCES:
-				var have: int = int(st.res[me][t]) if side == 0 else int(st.spent[t])
-				var cur: Array = psel.get("t", [])
-				var on: bool = cur.size() == 2 and cur[side] == t
-				var b := UI.button("%s %d" % [SKData.RES_NAME[t].substr(0, 3), have], 62, 30, 11)
-				if on:
-					UI.primary(b)
-				b.disabled = have <= 0
-				var tt: String = t
-				var sd: int = side
-				b.pressed.connect(func():
-					var c2: Array = psel.get("t", [])
-					if c2.size() != 2:
-						c2 = ["", ""]
-					c2[sd] = tt if c2[sd] != tt else ""
-					psel["t"] = c2 if c2[0] != "" or c2[1] != "" else []
-					if psel["t"].size() == 2 and (psel["t"][0] == "" or psel["t"][1] == ""):
-						pass
-					_build_prompt()
-					refresh())
-				row.add_child(b)
-			prompt_box.add_child(row)
-	# realizzare
-	c_build.add_child(UI.label("Realizza (paghi, prendi i PV):", 15, UI.GOLD, UI.font_italic))
-	var hf := HBoxContainer.new()
+	var passive: bool = pending.get("passive", false)
+	var left := int(pending.get("left", 1))
+	var head := "Hai la maggioranza nel regno dell'Alchimista: puoi attivare 1 carta." if passive else ("Attiva una carta" + (" (ne puoi attivare ancora %d)" % left if left > 1 else "") + ":")
+	if st.free_next[me]:
+		head += " Athanor: questa non costa risorse."
+	c_cards.add_child(UI.label(head, 15, UI.GOLD, UI.font_italic))
+	var hf := HFlowContainer.new()
+	hf.custom_minimum_size = Vector2(600, 0)
 	hf.add_theme_constant_override("h_separation", 6)
-
-	var after_t := st.clone()
-	if psel.get("t", []).size() == 2 and st.has_art(me, "A04"):
-		after_t._transmute(me, psel["t"])
+	hf.add_theme_constant_override("v_separation", 6)
+	var seen := {}
 	for id in st.hand[me]:
-		var ok: bool = after_t.can_afford(me, id) and st.build_allowed(me, id)
+		if seen.has(id):
+			continue
+		seen[id] = true
+		var ok: bool = st.can_afford(me, id)
 		var stt := 2 if psel.get("b", "") == id else (1 if ok else 3)
 		var idd: String = id
-		hf.add_child(_proj_thumb(id, 74, stt, func():
-			if psel.get("b", "") == idd:
-				psel["b"] = ""
-			elif ok:
-				psel["b"] = idd
-			else:
+		var cnt: int = st.hand[me].count(id)
+		var th := _proj_thumb(id, 74, stt, func():
+			if not ok:
 				_show_proj(idd)
 				return
-			if psel.get("uid", "") != "" and not _proj_state().ready_inventions(me).has(psel["uid"]):
-				psel["uid"] = ""
-				psel["u"] = {}
-				pstep = ""
+			_proj_pick_use(idd)
 			_build_prompt()
-			refresh()))
-	if st.hand[me].is_empty():
-		hf.add_child(UI.label("Nessun progetto in mano.", 14, UI.PARCH, UI.font_italic))
-	c_build.add_child(hf)
-	# usare
-	var ready := ps.ready_inventions(me)
-	if not ready.is_empty():
-		c_use.add_child(UI.label("Usa un'Invenzione pronta:", 15, UI.GOLD, UI.font_italic))
-		var hf2 := HBoxContainer.new()
-		hf2.add_theme_constant_override("h_separation", 6)
-		for id in ready:
-			var can := not ps.invention_uses(me, id).is_empty()
-			var stt2 := 2 if psel.get("uid", "") == id else (1 if can else 3)
-			var idd2: String = id
-			hf2.add_child(_proj_thumb(id, 74, stt2, func():
-				if not can:
-					_show_proj(idd2)
-					return
-				_proj_pick_use(idd2)
-				_build_prompt()
-				refresh()))
-		c_use.add_child(hf2)
+			refresh())
+		if cnt > 1:
+			th.tooltip_text += "\n(ne hai %d)" % cnt
+		hf.add_child(th)
+	c_cards.add_child(hf)
+	prompt_box = c_side
 	var hint := ""
 	var uid: String = psel.get("uid", "")
-	if uid != "":
+	if uid == "":
+		hint = "Tocca una carta illuminata: la paghi, ne risolvi l'effetto e la giri (a fine partita vale i PV stampati). Le carte scure non le puoi ancora pagare."
+	else:
+		var d: Dictionary = SKData.PROJECTS[uid]
+		prompt_box.add_child(UI.label(d["n"], 17, UI.GOLD, UI.font_title))
+		prompt_box.add_child(UI.wrap(d["t"], 14, UI.PARCH, 330))
 		match pstep:
 			"region": hint = "Tocca un regno illuminato."
-			"char": hint = "Tocca il ritratto del personaggio da spostare, qui sopra."
+			"char": hint = "Tocca il ritratto del personaggio da spostare, a destra."
 			"dest": hint = "Tocca il regno dove lo porti (frecce)."
 			"res": hint = "Tocca la risorsa nel riquadro di un avversario, a sinistra."
 			"site_a": hint = "Tocca un tuo villaggio illuminato (non il sito 1)."
 			"site_b": hint = "Tocca il villaggio avversario con cui scambiarlo."
 			"variant":
-				var row2 := HBoxContainer.new()
-				row2.add_theme_constant_override("separation", 8)
+				var fl := HFlowContainer.new()
+				fl.custom_minimum_size = Vector2(330, 0)
+				fl.add_theme_constant_override("h_separation", 6)
+				fl.add_theme_constant_override("v_separation", 6)
 				for u in _proj_uses(uid):
-					if int(u["r"]) != int(psel.get("ur", -1)):
+					if u.has("r") and int(u["r"]) != int(psel.get("ur", -1)):
 						continue
 					var lab := ""
-					if uid == "I03":
+					if uid == "A04":
+						lab = " + ".join(u["t"].map(func(t): return SKData.RES_NAME[t]))
+					elif uid == "I03":
 						lab = "Ricchezza +1" if int(u["d"]) == 1 else "Ricchezza -1"
 					else:
 						lab = "Aggiungi influenza" if u["add"] else "Togli influenza"
-					var bb := UI.button(lab, 200, 40, 14)
+					var bb := UI.button(lab, 160, 36, 13)
 					var uu: Dictionary = u
 					bb.pressed.connect(func():
 						psel["u"] = uu
 						pstep = ""
 						_build_prompt()
 						refresh())
-					row2.add_child(bb)
-				prompt_box.add_child(row2)
+					fl.add_child(bb)
+				prompt_box.add_child(fl)
 			"":
 				if not psel.get("u", {}).is_empty():
-					hint = "Bersaglio scelto: " + _use_text(psel["u"])
+					hint = "Effetto: " + _use_text(psel["u"])
+				elif SKData.PROJECTS[uid].get("auto", false):
+					hint = "Effetto: " + _use_text({"id": uid})
+				else:
+					hint = "Nessun bersaglio possibile ora: la carta si attiva solo per i PV."
 	if hint != "":
-		prompt_box.add_child(UI.wrap(hint, 16, UI.LIGHT, 330))
+		prompt_box.add_child(UI.wrap(hint, 15, UI.LIGHT, 330))
 	var row3 := HBoxContainer.new()
 	row3.add_theme_constant_override("separation", 8)
 	var v := _proj_value()
-	var err := st.check_projects(me, v)
-	if uid != "" and psel.get("u", {}).is_empty():
-		err = "scegli il bersaglio dell'Invenzione"
-	if psel.get("t", []).size() == 2 and (psel["t"][0] == "" or psel["t"][1] == ""):
-		err = "Trasmutatore: scegli cosa dai e cosa prendi"
-	var ok2 := UI.primary(UI.button("Conferma", 170, 46, 18))
-	ok2.disabled = err != "" or v.is_empty()
+	var err := st.check_projects(me, v) if not v.is_empty() else "scegli una carta"
+	if uid != "" and pstep != "":
+		err = "scegli il bersaglio dell'effetto"
+	var ok2 := UI.primary(UI.button("Attiva", 150, 46, 18))
+	ok2.disabled = err != ""
 	ok2.pressed.connect(func(): _provide(_proj_value()))
 	row3.add_child(ok2)
-	var skip := UI.button("Nessun progetto", 190, 46, 14)
+	var skip := UI.button("Non attivare", 170, 46, 14)
 	skip.pressed.connect(func(): _provide({}))
 	row3.add_child(skip)
 	prompt_box.add_child(row3)
-	if err != "" and not v.is_empty():
+	if err != "" and uid != "":
 		prompt_box.add_child(UI.wrap(err, 14, Color("#ffb0a0"), 330, UI.font_italic))
-	prompt_box = box
+	prompt_box = c_side.get_parent().get_parent()
 
 
 func _use_text(u: Dictionary) -> String:
@@ -2044,7 +2003,11 @@ func _use_text(u: Dictionary) -> String:
 		"I03": return "Ricchezza %s in %s" % ["+1" if int(u["d"]) == 1 else "-1", st.rname(int(u["r"]))]
 		"I04": return "%s in %s" % [SKData.cn(u["c"]), st.rname(int(u["to"]))]
 		"I05": return "%s influenza in %s" % ["aggiungi" if u["add"] else "togli", st.rname(int(u["r"]))]
-		"I06": return "+2 alla tua battaglia"
+		"I06": return "+2 alle tue battaglie di questo turno"
+		"A01": return "la prossima carta è gratis"
+		"A02": return "%s in %s" % [SKData.cn(u["c"]), st.rname(int(u["to"]))]
+		"A03": return "+1 alle tue battaglie di questo turno"
+		"A04": return "prendi " + " e ".join(u["t"].map(func(t): return SKData.RES_NAME[t]))
 		"I07": return "1 %s da %s" % [SKData.RES_NAME[u["t"]], st.pname(int(u["q"]))]
 		"I08": return "scambio fra %s e %s" % [st.rname(int(u["a"][0])), st.rname(int(u["b"][0]))]
 	return ""
@@ -2081,25 +2044,25 @@ func _house_projects(p: int) -> Control:
 	vb.add_theme_constant_override("separation", 2)
 	var hb := HFlowContainer.new()
 	hb.add_theme_constant_override("h_separation", 3)
-	hb.add_child(UI.label("Progetti %d PV" % st.proj_points(p), 14, UI.GOLD, UI.font_bold))
+	hb.add_child(UI.label("Carte girate %d PV" % st.proj_points(p), 14, UI.GOLD, UI.font_bold))
 	for b in st.built[p]:
 		var id: String = b["id"]
 		var t := _proj_thumb(id, 30, 0, func(): _show_proj(id))
 		if b["used"]:
 			t.modulate = Color(0.5, 0.5, 0.5)
-			t.tooltip_text += "\n(già usata)"
+			t.tooltip_text += "\n(girata: vale i PV a fine partita)"
 		hb.add_child(t)
 	vb.add_child(hb)
 	if _can_see_objective(p):
 		var hh := HFlowContainer.new()
 		hh.add_theme_constant_override("h_separation", 3)
-		hh.add_child(UI.label("In mano:", 13, UI.PARCH, UI.font_italic))
+		hh.add_child(UI.label("Da attivare:", 13, UI.PARCH, UI.font_italic))
 		for id in st.hand[p]:
 			var idd: String = id
 			hh.add_child(_proj_thumb(id, 30, 0, func(): _show_proj(idd)))
 		vb.add_child(hh)
 	else:
-		vb.add_child(UI.label("In mano: %d progetti segreti" % st.hand[p].size(), 13, UI.PARCH, UI.font_italic))
+		vb.add_child(UI.label("Da attivare: %d carte" % st.hand[p].size(), 13, UI.PARCH, UI.font_italic))
 	return vb
 
 

@@ -103,22 +103,26 @@ func _pause(kind: String, who := -1) -> void:
 	await pause_cb.call(kind, who, lines, regs.keys())
 
 
-## Variante dell'Alchimista: dopo l'azione, lo scarto dell'Athanor e la fase dei progetti.
+## Variante dell'Alchimista: dopo l'azione si attivano le carte (1, o 2 con la potenziata).
 func _alchemy_phase(p: int) -> void:
-	if not st.pending_ath[p].is_empty():
-		var d = await ask(p, {"type": "athanor", "cards": st.pending_ath[p].duplicate()})
-		st.resolve_athanor(p, int(d) if (d is int or d is float) else 0)
+	while st.act_left[p] > 0 and st.can_activate_any(p):
+		var v = await ask(p, {"type": "projects", "left": st.act_left[p]})
+		st.act_left[p] -= 1
+		if not (v is Dictionary) or v.is_empty():
+			break
+		if st.check_projects(p, v) == "":
+			st.apply_projects(p, v)
+		else:
+			log_msg("(attivazione non consentita: %s)" % st.check_projects(p, v))
 		flush_log()
 		changed.emit()
-	if st.projects_possible(p):
-		var v = await ask(p, {"type": "projects"})
-		if v is Dictionary and not v.is_empty():
-			if st.check_projects(p, v) == "":
-				st.apply_projects(p, v)
-			else:
-				log_msg("(progetti non consentiti: %s)" % st.check_projects(p, v))
-		flush_log()
-		changed.emit()
+	st.act_left[p] = 0
+
+
+## Passiva dell'Alchimista: chi ha la maggioranza nel suo regno può attivare una carta.
+func alch_act(p: int):
+	cur = p
+	return await ask(p, {"type": "projects", "passive": true})
 
 
 func provide_decision(r) -> void:

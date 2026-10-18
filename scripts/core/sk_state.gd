@@ -44,8 +44,11 @@ var pdiscard: Array = []       # scarti dell'Athanor (mai realizzati)
 var hand: Array = []           # progetti in mano (segreti) per giocatore
 var built: Array = []          # progetti realizzati: [{id, used}] per giocatore
 var spent: Dictionary = {}     # riserva delle risorse spese
-var pending_ath: Array = []    # progetti visti con l'Athanor, in attesa dello scarto
-var battle_bonus: Dictionary = {}  # esercito -> forza in più (Polvere del tuono)
+var pending_ath: Array = []    # (non più usato)
+var battle_bonus: Dictionary = {}  # (non più usato)
+var act_left: Array = []       # carte che si possono ancora attivare con l'Alchimista in questo turno
+var free_next: Array = []      # Athanor: la prossima carta attivata in questo turno non costa risorse
+var turn_bonus: Array = []     # forza in più nelle proprie battaglie di questo turno (Stendardo, Polvere)
 
 var rng := RandomNumberGenerator.new()
 var log_lines: Array = []
@@ -144,6 +147,9 @@ func _setup_alchemy() -> void:
 	hand.clear()
 	built.clear()
 	pending_ath.clear()
+	act_left.clear()
+	free_next.clear()
+	turn_bonus.clear()
 	spent = {}
 	for t in SKData.RESOURCES:
 		spent[t] = 0
@@ -151,15 +157,20 @@ func _setup_alchemy() -> void:
 		hand.append([])
 		built.append([])
 		pending_ath.append([])
+		act_left.append(0)
+		free_next.append(false)
+		turn_bonus.append(0)
 	if not alch():
 		return
+	# tutte le 24 carte in gioco, distribuite equamente (le eventuali avanzate restano fuori)
 	for id in SKData.PROJ_IDS:
 		deck.append(id)
 		deck.append(id)
 	_shuffle(deck)
-	# un progetto coperto a testa prima del piazzamento
-	for p in n:
-		hand[p].append(deck.pop_back())
+	var each := deck.size() / n
+	for k in each:
+		for p in n:
+			hand[p].append(deck.pop_back())
 
 
 func _shuffle(a: Array) -> void:
@@ -203,6 +214,9 @@ func clone() -> SKState:
 	s.spent = spent.duplicate()
 	s.pending_ath = pending_ath.duplicate(true)
 	s.battle_bonus = battle_bonus.duplicate()
+	s.act_left = act_left.duplicate()
+	s.free_next = free_next.duplicate()
+	s.turn_bonus = turn_bonus.duplicate()
 	s.quiet = true
 	return s
 
@@ -574,7 +588,7 @@ func available_chars() -> Array:
 func move_paths(c: String, p := -1) -> Array:
 	var from: int = chars[c]
 	var out := []
-	var extra: bool = p >= 0 and has_art(p, "A02")
+	var extra := false
 	if c == "cavalleria":
 		for a in land[from]:
 			out.append([a])
@@ -861,7 +875,7 @@ func apply_move(p: int, m: Dictionary) -> void:
 					log_msg("%s nomina un Vescovo nella Cattedrale di %s." % [pname(p), rname(b)])
 		"mercante":
 			if alch():
-				_alchemist_draw(p, 2 if pw else 1)
+				act_left[p] = 2 if pw else 1
 				return
 			var q := int(m.get("from", -1))
 			for t in m.get("res", []):
@@ -958,6 +972,13 @@ func passive_phase(ch) -> void:
 	if not regions[rm]["war"]:
 		if _econ_up(rm):
 			log_msg(SKData.cn("mercante") + " fa crescere la Ricchezza di %s a %d." % [rname(rm), econ(rm)])
+	if alch():
+		var wa = await _majority(ch, rm, "alchimista")
+		if wa >= 0 and can_activate_any(wa):
+			var v = await ch.alch_act(wa)
+			if v is Dictionary and not v.is_empty() and check_projects(wa, v) == "":
+				log_msg("%s ha la maggioranza nel regno dell'Alchimista e attiva una carta." % pname(wa))
+				apply_projects(wa, v)
 	# Spia
 	var rs: int = chars["spia"]
 	if not regions[rs]["peace"]:
@@ -991,12 +1012,9 @@ func _battle(ch, p: int, r: int, army: String) -> void:
 	if chars["fanteria"] == r:
 		atk += 1
 		parts.append("Fanteria +1")
-	if has_art(p, "A03"):
-		atk += 1
-		parts.append("Stendardo animato +1")
-	if int(battle_bonus.get(army, 0)) > 0:
-		atk += int(battle_bonus[army])
-		parts.append("Polvere del tuono +%d" % int(battle_bonus[army]))
+	if alch() and int(turn_bonus[p]) > 0:
+		atk += int(turn_bonus[p])
+		parts.append("carte dell'Alchimista +%d" % int(turn_bonus[p]))
 	if favor[p]:
 		var use = await ch.battle_favor(p, r)
 		if use:
@@ -1063,6 +1081,10 @@ func end_phase(_ch = null) -> void:
 		if _add_invader(r):
 			log_msg("Invasione! Gli invasori dilagano in %s, lasciato senza personaggi." % rname(r))
 	used.clear()
+	for q in act_left.size():
+		act_left[q] = 0
+		free_next[q] = false
+		turn_bonus[q] = 0
 	turn += 1
 	# tre guerre o un regno pieno di invasori fanno terminare subito la partita
 	check_end()
@@ -1248,13 +1270,11 @@ func fingerprint() -> String:
 
 
 # ------------------------------------------------------------------ variante dell'Alchimista
+## Tutte le carte sono distribuite all'inizio. Con l'Alchimista (o con la maggioranza nel suo regno,
+## nella passiva) si attiva una carta: si paga il costo in risorse, se ne risolve l'effetto e la si gira:
+## da quel momento non ha più effetto e a fine partita vale i PV stampati.
 
-func has_art(p: int, id: String) -> bool:
-	if p < 0 or p >= built.size():
-		return false
-	for b in built[p]:
-		if b["id"] == id:
-			return true
+func has_art(_p: int, _id: String) -> bool:
 	return false
 
 
@@ -1265,24 +1285,13 @@ func proj_points(p: int) -> int:
 	return k
 
 
-func art_count(p: int) -> int:
-	var k := 0
-	for b in built[p]:
-		if SKData.PROJECTS[b["id"]]["kind"] == "art":
-			k += 1
-	return k
-
-
-## Invenzioni realizzate e non ancora usate (id, senza doppioni).
-func ready_inventions(p: int) -> Array:
-	var out := []
-	for b in built[p]:
-		if SKData.PROJECTS[b["id"]]["kind"] == "inv" and not b["used"] and not out.has(b["id"]):
-			out.append(b["id"])
-	return out
+func ready_inventions(_p: int) -> Array:
+	return []
 
 
 func can_afford(p: int, id: String, r_: Dictionary = {}) -> bool:
+	if free_next.size() > p and free_next[p]:
+		return true
 	var have: Dictionary = r_ if not r_.is_empty() else res[p]
 	var cost: Dictionary = SKData.PROJECTS[id]["cost"]
 	for t in cost:
@@ -1291,95 +1300,39 @@ func can_afford(p: int, id: String, r_: Dictionary = {}) -> bool:
 	return true
 
 
-## Si può costruire (oltre al costo): massimo 2 Artefatti, di tipi diversi.
-func build_allowed(p: int, id: String) -> bool:
-	if SKData.PROJECTS[id]["kind"] != "art":
-		return true
-	return art_count(p) < 2 and not has_art(p, id)
+func build_allowed(_p: int, _id: String) -> bool:
+	return true
 
 
-func _draw(k: int) -> Array:
-	var out := []
-	for i in k:
-		if deck.is_empty() and not pdiscard.is_empty():
-			deck = pdiscard.duplicate()
-			pdiscard.clear()
-			_shuffle(deck)
-			log_msg("La pila dei progetti è finita: si rimescolano gli scarti.")
-		if deck.is_empty():
-			break
-		out.append(deck.pop_back())
-	return out
+func can_activate_any(p: int) -> bool:
+	for id in hand[p]:
+		if can_afford(p, id):
+			return true
+	return false
 
 
-func _alchemist_draw(p: int, k: int) -> void:
-	var ath := has_art(p, "A01")
-	var got := _draw(k + (1 if ath else 0))
-	if got.is_empty():
-		log_msg("L'Alchimista non trova progetti: la pila è vuota.")
-		return
-	if ath and got.size() > k:
-		pending_ath[p] = got
-		log_msg("%s guarda %d progetti con l'Athanor e ne scarterà uno." % [pname(p), got.size()])
-		return
-	hand[p].append_array(got)
-	ev("draw", {"p": p, "k": got.size()})
-	log_msg("%s pesca %d progett%s." % [pname(p), got.size(), "o" if got.size() == 1 else "i"])
+func projects_possible(p: int) -> bool:
+	return alch() and act_left[p] > 0 and can_activate_any(p)
 
 
-## Athanor: scarta il progetto i fra quelli appena visti, tiene gli altri.
-func resolve_athanor(p: int, i: int) -> void:
-	var seen: Array = pending_ath[p]
-	if seen.is_empty():
-		return
-	i = clampi(i, 0, seen.size() - 1)
-	pdiscard.append(seen[i])
-	seen.remove_at(i)
-	hand[p].append_array(seen)
-	pending_ath[p] = []
-	ev("draw", {"p": p, "k": seen.size()})
-	log_msg("%s scarta un progetto e ne tiene %d." % [pname(p), seen.size()])
-
-
-## Valore di un progetto in mano (per l'IA e per lo scarto automatico).
+## Valore di una carta da attivare (per l'IA).
 func proj_value(p: int, id: String) -> float:
 	var d: Dictionary = SKData.PROJECTS[id]
 	var miss := 0
 	for t in d["cost"]:
 		miss += maxi(0, int(d["cost"][t]) - int(res[p][t]))
-	var v := float(d["pv"]) + (1.2 if d["kind"] == "art" else 0.8) - 0.9 * miss
-	if not build_allowed(p, id):
-		v -= 4.0
-	return v
+	return float(d["pv"]) + 0.8 - 0.9 * miss
 
 
-func auto_athanor(p: int) -> void:
-	var seen: Array = pending_ath[p]
-	if seen.is_empty():
-		return
-	var worst := 0
-	for i in seen.size():
-		if proj_value(p, seen[i]) < proj_value(p, seen[worst]):
-			worst = i
-	resolve_athanor(p, worst)
+func auto_athanor(_p: int) -> void:
+	pass
 
 
-## Ha senso aprire la fase dei progetti? (qualcosa da costruire, usare o trasmutare)
-func projects_possible(p: int) -> bool:
-	if not alch():
-		return false
-	for id in hand[p]:
-		if can_afford(p, id) and build_allowed(p, id):
-			return true
-	if not ready_inventions(p).is_empty():
-		return true
-	if has_art(p, "A04") and total_res(p) > 0:
-		return true
-	return false
+func resolve_athanor(_p: int, _i: int) -> void:
+	pass
 
 
-## Fase dei progetti, dopo l'azione: v = {t: [dai, prendi] (Trasmutatore), b: id da realizzare,
-## u: {id, …bersagli} Invenzione da usare}. Restituisce "" se va bene, altrimenti il motivo.
+## Attivazione: v = {b: carta, u: {bersagli dell'effetto}}. "" se va bene, altrimenti il motivo.
 func check_projects(p: int, v: Dictionary) -> String:
 	var c := clone()
 	return c._do_projects(p, v)
@@ -1391,66 +1344,32 @@ func apply_projects(p: int, v: Dictionary) -> void:
 
 
 func _do_projects(p: int, v: Dictionary) -> String:
-	var tr: Array = v.get("t", [])
 	var b: String = str(v.get("b", ""))
 	var u: Dictionary = v.get("u", {})
-	var trans_done := false
-	if not tr.is_empty() and has_art(p, "A04"):
-		var e := _transmute(p, tr)
-		if e != "":
-			return e
-		trans_done = true
-	if b != "":
-		if not hand[p].has(b):
-			return "progetto non in mano"
-		if not build_allowed(p, b):
-			return "massimo due Artefatti, di tipi diversi"
-		if not can_afford(p, b):
-			return "risorse insufficienti"
+	if b == "":
+		return "scegli una carta"
+	if not hand[p].has(b):
+		return "carta non disponibile"
+	if not can_afford(p, b):
+		return "risorse insufficienti"
+	var free: bool = free_next[p]
+	free_next[p] = false
+	if not free:
 		var cost: Dictionary = SKData.PROJECTS[b]["cost"]
 		for t in cost:
 			res[p][t] -= int(cost[t])
 			spent[t] += int(cost[t])
-		hand[p].erase(b)
-		built[p].append({"id": b, "used": false, "turn": turn})
-		ev("build", {"p": p, "id": b})
-		log_msg("%s realizza %s (+%d PV)." % [pname(p), SKData.PROJECTS[b]["n"], int(SKData.PROJECTS[b]["pv"])])
-	if not tr.is_empty() and not trans_done:
-		if not has_art(p, "A04"):
-			return "serve il Trasmutatore"
-		var e2 := _transmute(p, tr)
-		if e2 != "":
-			return e2
+	hand[p].erase(b)
+	built[p].append({"id": b, "used": true, "turn": turn})
+	ev("build", {"p": p, "id": b})
+	log_msg("%s attiva %s%s (+%d PV a fine partita)." % [pname(p), SKData.PROJECTS[b]["n"], " senza pagare (Athanor)" if free else "", int(SKData.PROJECTS[b]["pv"])])
 	if not u.is_empty():
-		var id: String = str(u.get("id", ""))
-		if not ready_inventions(p).has(id):
-			return "Invenzione non pronta"
-		var e3 := _use_invention(p, id, u)
-		if e3 != "":
-			return e3
-		for x in built[p]:
-			if x["id"] == id and not x["used"]:
-				x["used"] = true
-				break
-	return ""
-
-
-func _transmute(p: int, tr: Array) -> String:
-	if tr.size() != 2:
-		return "scambio non valido"
-	var give: String = str(tr[0])
-	var take: String = str(tr[1])
-	if give == take or not res[p].has(give) or not spent.has(take):
-		return "scegli due risorse diverse"
-	if int(res[p][give]) <= 0:
-		return "non hai quella risorsa"
-	if int(spent[take]) <= 0:
-		return "quella risorsa non c'è fra le spese"
-	res[p][give] -= 1
-	spent[give] += 1
-	res[p][take] += 1
-	spent[take] -= 1
-	log_msg("Il Trasmutatore di %s cambia 1 %s in 1 %s." % [pname(p), SKData.RES_NAME[give], SKData.RES_NAME[take]])
+		u["id"] = b
+		var e := _use_invention(p, b, u)
+		if e != "":
+			return e
+	elif SKData.PROJECTS[b].get("auto", false):
+		_use_invention(p, b, {"id": b})
 	return ""
 
 
@@ -1511,23 +1430,21 @@ func _use_invention(p: int, id: String, u: Dictionary) -> String:
 						infl_supply += 1
 						ev("infl_out", {"r": r})
 						log_msg("%s: un'influenza religiosa lascia %s." % [nm, rname(r)])
-		"I04":
+		"I04", "A02":
 			var c: String = str(u.get("c", ""))
 			if not chars.has(c):
 				return "scegli un personaggio"
 			var from: int = chars[c]
 			var to := int(u.get("to", -1))
-			if not neighbors(from, c != "cavalleria").has(to):
+			if not _steps_from(from, c, 1 if id == "I04" else 2).has(to):
 				return "passo non consentito"
 			chars[c] = to
 			ev("move", {"c": c, "path": [from, to]})
 			log_msg("%s: %s porta %s in %s." % [nm, pname(p), SKData.cn(c), rname(to)])
-		"I06":
-			var a: String = str(u.get("c", ""))
-			if int(battles.get(a, -1)) != p:
-				return "serve una tua battaglia dichiarata in questo turno"
-			battle_bonus[a] = int(battle_bonus.get(a, 0)) + 2
-			log_msg("%s: la battaglia di %s avrà +2." % [nm, pname(p)])
+		"I06", "A03":
+			var k := 2 if id == "I06" else 1
+			turn_bonus[p] += k
+			log_msg("%s: le battaglie di %s in questo turno hanno +%d." % [nm, pname(p), k])
 		"I07":
 			var q := int(u.get("q", -1))
 			var t: String = str(u.get("t", ""))
@@ -1561,12 +1478,44 @@ func _use_invention(p: int, id: String, u: Dictionary) -> String:
 			log_msg("%s: %s scambia un villaggio con %s." % [nm, pname(p), pname(pb)])
 			_check_peace(ra)
 			_check_peace(rb)
+		"A01":
+			free_next[p] = true
+			log_msg("%s: la prossima carta di %s in questo turno non costa risorse." % [nm, pname(p)])
+		"A04":
+			var tk: Array = u.get("t", [])
+			if tk.size() != 2:
+				return "scegli due risorse"
+			var need := {}
+			for t in tk:
+				need[t] = int(need.get(t, 0)) + 1
+			for t in need:
+				if not spent.has(t) or int(spent[t]) < int(need[t]):
+					return "quelle risorse non ci sono fra le spese"
+			for t in tk:
+				spent[t] -= 1
+				res[p][t] += 1
+			log_msg("%s: %s prende %s dalle risorse spese." % [nm, pname(p), " e ".join(tk.map(func(t): return SKData.RES_NAME[t]))])
 		_:
-			return "Invenzione sconosciuta"
+			return "carta sconosciuta"
 	return ""
 
 
-## Tutti gli usi legali di un'Invenzione pronta (per l'IA e per illuminare i bersagli).
+## Regni raggiungibili da un personaggio con 1 o 2 passi (la Cavalleria senza porti).
+func _steps_from(from: int, c: String, k: int) -> Array:
+	var out := []
+	var sea_ok := c != "cavalleria"
+	for a in neighbors(from, sea_ok):
+		if not out.has(a):
+			out.append(a)
+		if k >= 2:
+			for b in neighbors(a, sea_ok):
+				if b != from and not out.has(b):
+					out.append(b)
+	return out
+
+
+## Tutti gli effetti legali di una carta (per l'IA e per illuminare i bersagli). [] = nessun bersaglio
+## (la carta si può comunque attivare per i PV, senza effetto); le carte senza bersaglio danno [{}].
 func invention_uses(p: int, id: String) -> Array:
 	var out := []
 	match id:
@@ -1592,14 +1541,12 @@ func invention_uses(p: int, id: String) -> Array:
 							out.append({"id": id, "r": r, "add": true})
 						if int(regions[r]["infl"]) > 0:
 							out.append({"id": id, "r": r, "add": false})
-		"I04":
+		"I04", "A02":
 			for c in SKData.CHARS:
-				for to in neighbors(chars[c], c != "cavalleria"):
+				for to in _steps_from(chars[c], c, 1 if id == "I04" else 2):
 					out.append({"id": id, "c": c, "to": to})
-		"I06":
-			for a in battles:
-				if int(battles[a]) == p:
-					out.append({"id": id, "c": a})
+		"I06", "A03", "A01":
+			out.append({"id": id, "x": 1})
 		"I07":
 			for q in n:
 				if q == p:
@@ -1617,4 +1564,14 @@ func invention_uses(p: int, id: String) -> Array:
 							var pb: int = regions[rb]["sites"][ib]
 							if pb >= 0 and pb < n and pb != p:
 								out.append({"id": id, "a": [ra, ia], "b": [rb, ib]})
+		"A04":
+			var ts := SKData.RESOURCES
+			for i in ts.size():
+				for j in range(i, ts.size()):
+					var t1: String = ts[i]
+					var t2: String = ts[j]
+					if t1 == t2 and int(spent[t1]) < 2:
+						continue
+					if int(spent[t1]) > 0 and int(spent[t2]) > 0:
+						out.append({"id": id, "t": [t1, t2]})
 	return out

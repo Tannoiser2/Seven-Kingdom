@@ -153,54 +153,45 @@ func _projects(view) -> void:
 	var st: SKState = view.engine.st
 	var me: int = view._me()
 	proj_stats["fasi"] += 1
-	# a volte il Trasmutatore
-	if st.has_art(me, "A04") and rng.randf() < 0.3:
-		for g in SKData.RESOURCES:
-			if st.res[me][g] > 0:
-				for t in SKData.RESOURCES:
-					if t != g and st.spent[t] > 0:
-						view.psel["t"] = [g, t]
-						break
-				break
+	var ok := []
 	for id in st.hand[me]:
-		var c := st.clone()
-		if not view.psel["t"].is_empty():
-			c._transmute(me, view.psel["t"])
-		if c.can_afford(me, id) and st.build_allowed(me, id) and rng.randf() < 0.8:
-			view.psel["b"] = id
-			break
-	var ready: Array = view._proj_state().ready_inventions(me)
-	if not ready.is_empty() and rng.randf() < 0.7:
-		var id: String = _pick(ready)
-		var uses: Array = view._proj_uses(id)
-		if not uses.is_empty():
-			view._proj_pick_use(id)
-			var u: Dictionary = _pick(uses)
-			match view.pstep:
-				"region", "variant":
-					view._proj_region(int(u["r"]))
-					if view.pstep == "variant":
-						view.psel["u"] = u
-						view.pstep = ""
-				"char":
-					view._pick_char(u["c"])
-					view._proj_region(int(u["to"]))
-				"res":
-					view._on_house_res(int(u["q"]), u["t"])
-				"site_a":
-					view._proj_site(int(u["a"][0]), int(u["a"][1]))
-					view._proj_site(int(u["b"][0]), int(u["b"][1]))
+		if st.can_afford(me, id):
+			ok.append(id)
+	if ok.is_empty() or rng.randf() < 0.15:
+		view._provide({})
+		return
+	var id: String = _pick(ok)
+	view._proj_pick_use(id)
+	var uses: Array = view._proj_uses(id)
+	if not uses.is_empty() and view.pstep != "":
+		var u: Dictionary = _pick(uses)
+		match view.pstep:
+			"region":
+				view._proj_region(int(u["r"]))
+				if view.pstep == "variant":
+					view.psel["u"] = u
+					view.pstep = ""
+			"variant":
+				view.psel["u"] = u
+				view.pstep = ""
+			"char":
+				view._pick_char(u["c"])
+				view._proj_region(int(u["to"]))
+			"res":
+				view._on_house_res(int(u["q"]), u["t"])
+			"site_a":
+				view._proj_site(int(u["a"][0]), int(u["a"][1]))
+				view._proj_site(int(u["b"][0]), int(u["b"][1]))
 	await wait(1)
 	var v: Dictionary = view._proj_value()
 	var err := st.check_projects(me, v)
-	if err != "" or (view.psel.get("uid", "") != "" and view.psel.get("u", {}).is_empty()):
+	if err != "" or view.pstep != "":
 		proj_stats["rifiutati"] += 1
 		print("PROGETTI RIFIUTATI: ", err, " ", v, " passo ", view.pstep)
 		bad += 1
 		view._provide({})
 		return
-	if v.has("b"):
-		proj_stats["realizzati"] += 1
+	proj_stats["realizzati"] += 1
 	if v.has("u"):
 		proj_stats["usati"] += 1
 	view._provide(v)
