@@ -48,6 +48,7 @@ var pending_ath: Array = []    # (non più usato)
 var battle_bonus: Dictionary = {}  # (non più usato)
 var act_left: Array = []       # carte che si possono ancora attivare con l'Alchimista in questo turno
 var free_next: Array = []      # Athanor: la prossima carta attivata in questo turno non costa risorse
+var ath_count: Array = []      # attivazioni con l'Athanor girato (ogni due, una risorsa)
 var jolly: Array = []          # risorse jolly (dalla passiva dell'Alchimista): valgono come qualsiasi risorsa
 var turn_bonus: Array = []     # forza in più nelle proprie battaglie di questo turno (Stendardo, Polvere)
 
@@ -152,6 +153,7 @@ func _setup_alchemy() -> void:
 	free_next.clear()
 	turn_bonus.clear()
 	jolly.clear()
+	ath_count.clear()
 	spent = {}
 	for t in SKData.RESOURCES:
 		spent[t] = 0
@@ -163,6 +165,7 @@ func _setup_alchemy() -> void:
 		free_next.append(false)
 		turn_bonus.append(0)
 		jolly.append(0)
+		ath_count.append(0)
 	if not alch():
 		return
 	# tutte le 24 carte in gioco, distribuite equamente (le eventuali avanzate restano fuori)
@@ -221,6 +224,7 @@ func clone() -> SKState:
 	s.free_next = free_next.duplicate()
 	s.turn_bonus = turn_bonus.duplicate()
 	s.jolly = jolly.duplicate()
+	s.ath_count = ath_count.duplicate()
 	s.quiet = true
 	return s
 
@@ -1026,6 +1030,9 @@ func _battle(ch, p: int, r: int, army: String) -> void:
 	if alch() and has_art(p, "A03"):
 		atk += 1
 		parts.append("Stendardo animato +1")
+	if alch() and has_art(p, "I06"):
+		atk += 1
+		parts.append("Polvere del tuono +1")
 	if alch() and int(turn_bonus[p]) > 0:
 		atk += int(turn_bonus[p])
 		parts.append("carte dell'Alchimista +%d" % int(turn_bonus[p]))
@@ -1445,8 +1452,22 @@ func _do_projects(p: int, v: Dictionary) -> String:
 			return e
 	elif SKData.PROJECTS[b].get("auto", false):
 		_use_invention(p, b, {"id": b})
+	# l'Alchimista purifica: ogni carta attivata scaccia un invasore dal suo regno
+	if opts.get("alch_slow", true):
+		var ra: int = chars["mercante"]
+		var ix: int = regions[ra]["sites"].rfind(INV)
+		if ix >= 0:
+			regions[ra]["sites"][ix] = -1
+			inv_supply += 1
+			ev("inv_out", {"r": ra, "i": ix})
+			log_msg("L'Alchimista scaccia un invasore da %s." % rname(ra))
+			if regions[ra]["war"] and not regions[ra]["sites"].has(INV):
+				regions[ra]["war"] = false
+				log_msg("La guerra in %s finisce." % rname(ra))
 	if had_ath:
-		_athanor_gain(p)
+		ath_count[p] += 1
+		if ath_count[p] % 2 == 0:
+			_athanor_gain(p)
 	return ""
 
 
@@ -1457,7 +1478,7 @@ func _use_invention(p: int, id: String, u: Dictionary) -> String:
 			var r := int(u.get("r", -1))
 			if r < 0 or r >= regions.size():
 				return "scegli un regno"
-			if regions[r]["war"]:
+			if regions[r]["war"] and id != "I02":
 				return "non in un regno in guerra"
 			if count(r, p) <= 0:
 				return "serve un tuo villaggio nel regno"
@@ -1473,13 +1494,22 @@ func _use_invention(p: int, id: String, u: Dictionary) -> String:
 					log_msg("%s: %s costruisce un villaggio in %s." % [nm, pname(p), rname(r)])
 					_check_peace(r)
 				"I02":
-					var idx: int = regions[r]["sites"].find(INV)
-					if idx < 0:
+					var k2 := 0
+					for z in 2:
+						var idx: int = regions[r]["sites"].find(INV)
+						if idx < 0:
+							break
+						regions[r]["sites"][idx] = -1
+						inv_supply += 1
+						k2 += 1
+						ev("inv_out", {"r": r, "i": idx})
+					if k2 == 0:
 						return "nel regno non ci sono invasori"
-					regions[r]["sites"][idx] = -1
-					inv_supply += 1
-					ev("inv_out", {"r": r, "i": idx})
-					log_msg("%s: un invasore lascia %s." % [nm, rname(r)])
+					log_msg("%s: %d invasor%s lascia%s %s." % [nm, k2, "e" if k2 == 1 else "i", "" if k2 == 1 else "no", rname(r)])
+					if regions[r]["war"] and not regions[r]["sites"].has(INV):
+						regions[r]["war"] = false
+						ev("peace_war", {"r": r})
+						log_msg("La guerra in %s finisce." % rname(r))
 				"I03":
 					var d := int(u.get("d", 0))
 					var e := int(regions[r]["econ"])
@@ -1521,9 +1551,7 @@ func _use_invention(p: int, id: String, u: Dictionary) -> String:
 			ev("move", {"c": c, "path": [from, to]})
 			log_msg("%s: %s porta %s in %s." % [nm, pname(p), SKData.cn(c), rname(to)])
 		"I06":
-			var k := 2
-			turn_bonus[p] += k
-			log_msg("%s: le battaglie di %s in questo turno hanno +%d." % [nm, pname(p), k])
+			log_msg("%s: da ora il suo effetto è permanente per %s." % [nm, pname(p)])
 		"I07":
 			var q := int(u.get("q", -1))
 			var t: String = str(u.get("t", ""))
@@ -1583,7 +1611,7 @@ func invention_uses(p: int, id: String) -> Array:
 	match id:
 		"I01", "I02", "I03", "I05":
 			for r in regions.size():
-				if regions[r]["war"] or count(r, p) <= 0:
+				if (regions[r]["war"] and id != "I02") or count(r, p) <= 0:
 					continue
 				match id:
 					"I01":
