@@ -1113,9 +1113,13 @@ func end_phase(_ch = null) -> void:
 
 ## Controllo di fine gioco. Restituisce true (e imposta game_over) se la partita è finita.
 func check_end() -> bool:
+	# variante dell'Alchimista, regola di durata: nessuna fine prima del 5° turno
+	if alch() and opts.get("alch_late", false) and turn < 4:
+		return false
+	var peace_need := 4 if alch() and opts.get("alch_peace4", true) else 3
 	if war_count() >= 3:
 		end_reason = "guerre"
-	elif peace_count() >= 3:
+	elif peace_count() >= peace_need:
 		end_reason = "pace"
 	else:
 		for r in regions.size():
@@ -1135,7 +1139,7 @@ func check_end() -> bool:
 
 const END_TEXT := {
 	"guerre": "Tre Guerre infuriano contemporaneamente nel regno.",
-	"pace": "Tre regni sono stati pacificati.",
+	"pace": "I regni pacificati sono abbastanza (tre, quattro con l'Alchimista).",
 	"invasione": "Un regno è caduto interamente in mano agli invasori.",
 	"fede": "La Ricchezza di un regno è tutta coperta dall'influenza religiosa.",
 	"papa": "Il Papa ha esaurito l'influenza religiosa.",
@@ -1533,10 +1537,14 @@ func _use_invention(p: int, id: String, u: Dictionary) -> String:
 					else:
 						if int(regions[r]["infl"]) <= 0:
 							return "nel regno non c'è influenza religiosa"
-						regions[r]["infl"] -= 1
-						infl_supply += 1
-						ev("infl_out", {"r": r})
-						log_msg("%s: un'influenza religiosa lascia %s." % [nm, rname(r)])
+						var k3 := 2 if opts.get("alch_incenso2", true) else 1
+						for z in k3:
+							if int(regions[r]["infl"]) <= 0:
+								break
+							regions[r]["infl"] -= 1
+							infl_supply += 1
+							ev("infl_out", {"r": r})
+						log_msg("%s: l'influenza religiosa lascia %s e torna al Papa." % [nm, rname(r)])
 		"A01", "A02", "A03", "A04":
 			log_msg("%s: da ora il suo effetto è permanente per %s." % [nm, pname(p)])
 		"I04":

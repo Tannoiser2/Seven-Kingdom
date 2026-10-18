@@ -481,7 +481,7 @@ const PROJECTS := {
 	"I04": {"n": "Stivali del vento", "kind": "inv", "cost": {"grano": 1}, "pv": 1,
 		"t": "Muovi di 1 passo legale un personaggio a scelta, anche già usato nel turno. Non compie azioni e non torna disponibile."},
 	"I05": {"n": "Incenso consacrato", "kind": "inv", "cost": {"pietra": 1, "oro": 1}, "pv": 2,
-		"t": "In un regno non in guerra dove hai un villaggio, aggiungi 1 influenza religiosa al valore scoperto più alto oppure rimuovi quella al valore occupato più basso."},
+		"t": "In un regno non in guerra dove hai un villaggio, aggiungi 1 influenza religiosa al valore scoperto più alto oppure togline fino a 2, che tornano al Papa."},
 	"I06": {"n": "Polvere del tuono", "kind": "inv", "cost": {"legno": 1}, "pv": 1, "auto": true, "perm": true,
 		"t": "Permanente: +1 alla tua forza in tutte le tue battaglie."},
 	"I07": {"n": "Mano invisibile", "kind": "inv", "cost": {"oro": 1}, "pv": 1,

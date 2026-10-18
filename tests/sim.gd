@@ -7,7 +7,8 @@ func _init() -> void:
 	var games := int(args[0]) if args.size() > 0 else 10
 	var levels: Array = (args[1] if args.size() > 1 else "1,1,1,1").split(",")
 	var scen_id: String = args[2] if args.size() > 2 else "base"
-	var opts := {"objectives": args.size() > 3 and args[3].contains("o"), "dice": args.size() > 3 and args[3].contains("d"), "alchemist": args.size() > 3 and args[3].contains("a")}
+	var opts := {"objectives": args.size() > 3 and args[3].contains("o"), "dice": args.size() > 3 and args[3].contains("d"), "alchemist": args.size() > 3 and args[3].contains("a"),
+		"alch_incenso2": not (args.size() > 3 and args[3].contains("x")), "alch_peace4": not (args.size() > 3 and args[3].contains("x")), "alch_late": args.size() > 3 and args[3].contains("5")}
 	var wins := {}
 	var reasons := {}
 	var turns := 0
