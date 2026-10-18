@@ -425,7 +425,7 @@ func refresh() -> void:
 	var who := ""
 	if engine.cur >= 0:
 		who = " — tocca a %s" % engine.pname(engine.cur)
-	phase_lbl.text = {"obiettivi": "Scelta degli obiettivi", "preparazione": "Piazzamento iniziale", "azioni": "Azioni dei giocatori", "passive": "Azioni passive dei personaggi", "fine turno": "Fine del turno", "fine": "Partita conclusa"}.get(ph, ph) + who + "   ·   Guerre %d/3 · Regni in pace %d/%d" % [st.war_count(), st.peace_count(), 4 if st.alch() and st.opts.get("alch_peace4", true) else 3]
+	phase_lbl.text = {"obiettivi": "Scelta degli obiettivi", "preparazione": "Piazzamento iniziale", "azioni": "Azioni dei giocatori", "passive": "Azioni passive dei personaggi", "fine turno": "Fine del turno", "fine": "Partita conclusa"}.get(ph, ph) + who + "   ·   Guerre %d/3 · Regni in pace %d/%d" % [st.war_count(), st.peace_count(), 4 if st.alch() and st.opts.get("alch_peace4", true) else 3] + ("   ·   Turno di tregua: niente invasione" if st.truce_turn() and ph != "fine" else "")
 	_refresh_left()
 	_refresh_cards()
 	_apply_highlight()

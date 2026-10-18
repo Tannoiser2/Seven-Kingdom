@@ -1094,7 +1094,7 @@ func end_phase(_ch = null) -> void:
 		return
 	# invasione: nei regni senza personaggi, non pacificati e non in guerra
 	# (regola di prova «invasione a turni alterni»: solo nei turni pari)
-	var invade: bool = not (opts.get("inv_alt", false) and turn % 2 == 0)
+	var invade: bool = not (truce_turn())
 	if not invade:
 		log_msg("Turno di tregua: questa volta non arrivano invasori.")
 	for r in regions.size():
@@ -1117,6 +1117,11 @@ func end_phase(_ch = null) -> void:
 	turn += 1
 	# tre guerre o un regno pieno di invasori fanno terminare subito la partita
 	check_end()
+
+
+## Turno di tregua (variante dell'Alchimista): a turni alterni, a fine turno non arrivano invasori.
+func truce_turn() -> bool:
+	return opts.get("inv_alt", alch()) and turn % 2 == 0
 
 
 ## Controllo di fine gioco. Restituisce true (e imposta game_over) se la partita è finita.

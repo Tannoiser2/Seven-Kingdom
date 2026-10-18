@@ -10,7 +10,7 @@ func _init() -> void:
 	var opts := {"objectives": args.size() > 3 and args[3].contains("o"), "dice": args.size() > 3 and args[3].contains("d"), "alchemist": args.size() > 3 and args[3].contains("a"),
 		"alch_incenso2": not (args.size() > 3 and args[3].contains("x")), "alch_peace4": not (args.size() > 3 and args[3].contains("x")), "alch_late": args.size() > 3 and args[3].contains("5"),
 		"alch_wars4": args.size() > 3 and args[3].contains("w"), "alch_inv_soft": args.size() > 3 and args[3].contains("s"),
-		"inv_alt": args.size() > 3 and args[3].contains("t")}
+		"inv_alt": args.size() > 3 and (args[3].contains("t") or (args[3].contains("a") and not args[3].contains("x")))}
 	var wins := {}
 	var reasons := {}
 	var turns := 0
